@@ -5,17 +5,22 @@ def show_mascota_form(profile, on_update_callback=None):
 
     col_img, col_form = st.columns([1,4])
     with col_img:
-        # Solo muestra el uploader si no hay foto subida
-        if "foto_mascota_bytes" not in st.session_state:
-            img = st.file_uploader("Foto de la mascota", type=["png", "jpg", "jpeg"], key="foto_mascota")
-            if img is not None:
-                st.session_state["foto_mascota_bytes"] = img.getvalue()
-                st.session_state["foto_mascota_name"] = mascota.get("nombre", "")
-        # Si hay foto, solo la imagen y el nombre, sin uploader
+        # Uploader SIEMPRE visible
+        img = st.file_uploader("Foto de la mascota", type=["png", "jpg", "jpeg"], key="foto_mascota")
+        # Si hay imagen subida en el uploader, actualiza la foto en session_state
+        if img is not None:
+            st.session_state["foto_mascota_bytes"] = img.getvalue()
+            st.session_state["foto_mascota_name"] = mascota.get("nombre", "")
+        # Mostrar imagen actual si existe
         if "foto_mascota_bytes" in st.session_state:
             st.image(st.session_state["foto_mascota_bytes"], width=140)
             nombre = mascota.get("nombre", st.session_state.get("foto_mascota_name", ""))
             st.markdown(f"<div style='text-align:center;font-weight:600;font-size:16px'>{nombre}</div>", unsafe_allow_html=True)
+            # Botón para eliminar foto
+            if st.button("Eliminar foto de la mascota"):
+                del st.session_state["foto_mascota_bytes"]
+                if "foto_mascota_name" in st.session_state:
+                    del st.session_state["foto_mascota_name"]
 
     with col_form:
         col1, col2 = st.columns([2,2])
