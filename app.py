@@ -10,7 +10,7 @@ from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 
-# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL CON NOMBRE MASCOTA ========================
+# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL CON NOMBRE MASCOTA Y FOTO ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
 st.markdown("""
     <style>
@@ -77,6 +77,8 @@ with st.sidebar:
     st.image("assets/logo.png", width=110)
     mascota = profile.get("mascota", {})
     nombre_mascota = mascota.get("nombre", "")
+    if "foto_mascota_bytes" in st.session_state:
+        st.image(st.session_state["foto_mascota_bytes"], width=60)
     if nombre_mascota:
         st.markdown(f"<div style='font-size:18px;font-weight:700;padding:8px 0 0 0'>🐶 {nombre_mascota}</div>", unsafe_allow_html=True)
     st.markdown(
@@ -124,7 +126,7 @@ def clean_state(keys_prefix, valid_names):
 st.title("Gestión y Análisis de Dietas")
 
 tabs = st.tabs([
-    "Perfil de Mascota",  # NUEVA PESTAÑA INICIAL
+    "Perfil de Mascota",
     "Formulación",
     "Resultados",
     "Gráficos",
@@ -133,7 +135,6 @@ tabs = st.tabs([
 
 # ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
 with tabs[0]:
-    st.header("Perfil de Mascota")
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
     nombre_mascota = mascota.get("nombre","Mascota")
@@ -156,7 +157,6 @@ with tabs[0]:
     st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
     if energia:
         factor = energia / 1000
-        import pandas as pd
         df_nutr = pd.DataFrame([
             {
                 "Nutriente": nutr,
@@ -175,13 +175,15 @@ with tabs[1]:
     st.header("Formulación de Dieta")
     mascota = st.session_state.get("profile", {}).get("mascota", {})
     nombre_mascota = mascota.get("nombre", "Mascota")
+    if "foto_mascota_bytes" in st.session_state:
+        st.image(st.session_state["foto_mascota_bytes"], width=60)
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     # ---- 6.1 Carga de ingredientes ----
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
     ingredientes_df = load_ingredients(ingredientes_file)
-
+    
     if ingredientes_df is not None and not ingredientes_df.empty:
         ingredientes_df = ingredientes_df.replace('.', 0)
         nutr_cols = [
