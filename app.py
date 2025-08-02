@@ -5,6 +5,8 @@ import numpy as np
 import plotly.graph_objects as go
 from data import load_ingredients, get_nutrient_list
 from optimization import DietFormulator
+from profile import load_profile, save_profile, update_mascota_en_perfil
+from ui import show_mascota_form
 
 # ======================== BLOQUE 2: ESTILO Y LOGO ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
@@ -55,7 +57,7 @@ with st.sidebar:
     )
 
 # ======================== BLOQUE 3: LOGIN CON ARCHIVO AUTH.PY ROBUSTO ========================
-from auth import USERS_DB  # <-- IMPORTA TU ARCHIVO AUTH.PY AQUÍ
+from auth import USERS_DB
 
 def login():
     st.title("Iniciar sesión")
@@ -63,7 +65,6 @@ def login():
     password = st.text_input("Contraseña", type="password", key="password_login")
     login_btn = st.button("Entrar", key="entrar_login")
     if login_btn:
-        # El usuario se busca ignorando espacios y mayúsculas/minúsculas
         user = USERS_DB.get(username.strip().lower())
         if user and user["password"] == password:
             st.session_state["logged_in"] = True
@@ -73,7 +74,6 @@ def login():
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos.")
-    # Evita que continúe la app si no está logueado
     if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
         st.stop()
 
@@ -81,6 +81,18 @@ if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
     login()
 
 USER_KEY = f"uywa_req_{st.session_state['usuario']}"
+user = st.session_state["user"]
+
+# ======================== BLOQUE 3.1: CARGA Y FORMULARIO DE PERFIL DE MASCOTA ========================
+profile = load_profile(user)
+
+def update_and_save_profile(updated_profile):
+    save_profile(user, updated_profile)
+    st.session_state["profile"] = updated_profile
+
+show_mascota_form(profile, on_update_callback=update_and_save_profile)
+st.session_state["profile"] = profile  # Guarda el perfil en sesión
+
 st.markdown(f"<div style='text-align:right'>👤 Usuario: <b>{st.session_state['usuario']}</b></div>", unsafe_allow_html=True)
 
 # ======================== BLOQUE 4: UTILIDADES DE SESIÓN ========================
@@ -99,7 +111,6 @@ def clean_state(keys_prefix, valid_names):
             if key.startswith(prefix):
                 found = False
                 for n in valid_names:
-                    # Busca coincidencia sólo para claves únicas (sin índices)
                     if key.endswith(f"{n}_incl_input") or key.endswith(f"{n}_input"):
                         found = True
                         break
@@ -115,11 +126,21 @@ tabs = st.tabs(["Formulación", "Resultados", "Gráficos", "Comparar Escenarios"
 with tabs[0]:
     st.header("Formulación de Dieta")
 
+    # --- NUEVO: Mostrar datos de la mascota actual ---
+    mascota = profile.get("mascota", {})
+    st.markdown("### Perfil de Mascota Seleccionado")
+    st.write(f"**Especie:** {mascota.get('especie', '---')}")
+    st.write(f"**Condición:** {mascota.get('condicion', '---')}")
+    st.write(f"**Edad:** {mascota.get('edad', '---')} años")
+    st.write(f"**Peso:** {mascota.get('peso', '---')} kg")
+    if mascota.get("condicion") == "enfermedad":
+        st.write(f"**Enfermedad:** {mascota.get('enfermedad', '---')}")
+    st.markdown("---")
+
     # ---- 6.1 Carga de ingredientes ----
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
     ingredientes_df = load_ingredients(ingredientes_file)
 
-    # ====== 6.1.1 LIMPIEZA Y CONVERSIÓN DE DATOS DE INGREDIENTES (intermedio) ======
     if ingredientes_df is not None and not ingredientes_df.empty:
         ingredientes_df = ingredientes_df.replace('.', 0)
         nutr_cols = [
@@ -147,7 +168,7 @@ with tabs[0]:
             key="ingredientes_sel"
         )
 
-        ingredientes_sel = list(dict.fromkeys(ingredientes_sel))  # Elimina duplicados
+        ingredientes_sel = list(dict.fromkeys(ingredientes_sel))
         clean_state(["min_", "max_"], ingredientes_sel)
 
         st.subheader("¿Deseas limitar inclusión de algún ingrediente?")
@@ -219,21 +240,7 @@ with tabs[0]:
         else:
             ingredientes_df_filtrado = pd.DataFrame()
 
-        # ---- 6.4 Selección de especie y etapa ----
-        st.subheader("Configura los requerimientos nutricionales")
-        especies = ["Aves", "Cerdos", "Rumiantes"]
-        etapa_default = {
-            "Aves": ["Pollitos", "Pollos de engorde", "Reproductoras"],
-            "Cerdos": ["Crecimiento", "Engorde", "Reproductoras"],
-            "Rumiantes": ["Terneros", "Vacas lecheras", "Vacas secas"]
-        }
-        especie = st.selectbox("Especie", especies, key="especie_selectbox")
-        etapas_opciones = etapa_default.get(especie, [])
-        etapa = st.selectbox("Etapa", etapas_opciones + ["Otra"], key="etapa_selectbox")
-        if etapa == "Otra":
-            etapa = st.text_input("Ingrese nombre de la etapa", key="etapa_input")
-
-        # ---- 6.5 Selección de nutrientes ----
+        # ---- 6.4 Selección de nutrientes ----
         nutrientes_posibles = get_nutrient_list(ingredientes_df) if not ingredientes_df.empty else []
         nutrientes_seleccionados = st.multiselect(
             "Nutrientes a considerar en la formulación",
@@ -244,7 +251,7 @@ with tabs[0]:
         nutrientes_seleccionados = list(dict.fromkeys(nutrientes_seleccionados))
         clean_state(["min_", "max_"], nutrientes_seleccionados)
 
-        # ---- 6.6 BLOQUE DE INPUTS DE NUTRIENTES ----
+        # ---- 6.5 BLOQUE DE INPUTS DE NUTRIENTES ----
         st.write("Ingrese los valores mínimos y máximos permitidos para cada nutriente (máximo opcional):")
         head_cols = st.columns([2, 1, 1])
         with head_cols[0]:
@@ -287,12 +294,11 @@ with tabs[0]:
         req_input = nutrientes_data
         st.session_state["req_input"] = req_input
 
-        # ---- 6.7 SUBAPARTADO DE RATIOS ENTRE NUTRIENTES ----
+        # ---- 6.6 SUBAPARTADO DE RATIOS ENTRE NUTRIENTES ----
         st.subheader("Restricciones adicionales: Ratios entre nutrientes")
         if "ratios" not in st.session_state:
             st.session_state["ratios"] = []
 
-        # Opciones de operadores disponibles
         operadores = {
             "=": "Igual a",
             "<=": "Menor o igual que",
@@ -340,18 +346,17 @@ with tabs[0]:
                 with cols_ratio_disp[1]:
                     if st.button("🗑️ Eliminar", key=f"eliminar_ratio_{i}"):
                         ratios_a_borrar.append(i)
-            # Borrado fuera del loop para evitar problemas de reindexación
             if ratios_a_borrar:
                 for idx in sorted(ratios_a_borrar, reverse=True):
                     st.session_state["ratios"].pop(idx)
 
-        # ---- 6.8 Guardado seguro para diagnóstico en resultados ----
+        # ---- 6.7 Guardado seguro para diagnóstico en resultados ----
         if not ingredientes_df_filtrado.empty:
             st.session_state["ingredients_df"] = ingredientes_df_filtrado.copy()
         elif not ingredientes_df.empty:
             st.session_state["ingredients_df"] = ingredientes_df.copy()
 
-        # ---- 6.9 Formulable y botón ----
+        # ---- 6.8 Formulable y botón ----
         formulable = not ingredientes_df_filtrado.empty and nutrientes_seleccionados
 
         def is_zero(val):
@@ -366,8 +371,6 @@ with tabs[0]:
 
         if formulable:
             if st.button("Formular dieta óptima"):
-                # Aquí deberías llamar a tu optimizador real,
-                # pasándole también st.session_state["ratios"] como argumento
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
