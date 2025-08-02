@@ -1,11 +1,52 @@
-# Ejemplo: completa con tus valores de referencia por cada 1000 kcal
-NUTRIENTES_REFERENCIA_PERRO = {
-    "proteína": 50,      # gramos / 1000 kcal
-    "calcio": 1.0,       # gramos / 1000 kcal
-    "fósforo": 0.8,      # gramos / 1000 kcal
-    # ... agrega más nutrientes
-}
+# Referencia de requerimientos nutricionales para perros por cada 1000 kcal de energía metabolizable.
+# Los valores son mínimos y máximos por nutriente para aplicar proporcionalmente según la energía total calculada.
 
+NUTRIENTES_REFERENCIA_PERRO = {
+    "Protein": {"min": 62.5, "max": None, "unit": "g"},
+    "Arginine": {"min": 2.04, "max": None, "unit": "g"},
+    "Histidine": {"min": 0.98, "max": None, "unit": "g"},
+    "Isoleucine": {"min": 1.63, "max": None, "unit": "g"},
+    "Leucine": {"min": 3.23, "max": None, "unit": "g"},
+    "Lysine": {"min": 2.2, "max": 7, "unit": "g"},
+    "Methionine": {"min": 0.88, "max": None, "unit": "g"},
+    "Methionine + Cystine": {"min": 1.65, "max": None, "unit": "g"},
+    "Phenylalanine": {"min": 1.63, "max": None, "unit": "g"},
+    "Phenylalanine + Tyrosine": {"min": 3.25, "max": None, "unit": "g"},
+    "Threonine": {"min": 1.23, "max": None, "unit": "g"},
+    "Tryptophan": {"min": 0.58, "max": None, "unit": "g"},
+    "Valine": {"min": 1.7, "max": None, "unit": "g"},
+    "Fat": {"min": 21.25, "max": None, "unit": "g"},
+    "Linoleic acid (ω-6)": {"min": 3.25, "max": 16.25, "unit": "g"},
+    "Arachidonic acid (ω-6)": {"min": 75, "max": None, "unit": "mg"},
+    "Alpha-linolenic acid (ω-3)": {"min": 0.3, "max": None, "unit": "g"},
+    "EPA + DHA (ω-3)": {"min": 0.13, "max": None, "unit": "g"},
+    "Calcium": {"min": 2.5, "max": 4, "unit": "g"},
+    "Phosphorus": {"min": 2.25, "max": None, "unit": "g"},
+    "Ca / P ratio": {"min": 1.0, "max": 1.6, "unit": "-"},
+    "Potassium": {"min": 0.6, "max": None, "unit": "g"},
+    "Sodium": {"min": 0.55, "max": None, "unit": "g"},
+    "Chloride": {"min": 0.85, "max": None, "unit": "g"},
+    "Magnesium": {"min": 0.04, "max": None, "unit": "g"},
+    "Copper": {"min": 2.75, "max": None, "unit": "mg"},
+    "Iodine": {"min": 0.38, "max": None, "unit": "mg"},
+    "Iron": {"min": 22, "max": None, "unit": "mg"},
+    "Manganese": {"min": 1.4, "max": None, "unit": "mg"},
+    "Selenium": {"min": 100, "max": None, "unit": "μg"},
+    "Zinc": {"min": 25, "max": None, "unit": "mg"},
+    "Vitamin A": {"min": 1250, "max": None, "unit": "IU"},
+    "Vitamin D": {"min": 138, "max": None, "unit": "IU"},
+    "Vitamin E": {"min": 12.5, "max": None, "unit": "IU"},
+    "Vitamin B1 (Thiamine)": {"min": 0.45, "max": None, "unit": "mg"},
+    "Vitamin B2 (Riboflavin)": {"min": 1.05, "max": None, "unit": "mg"},
+    "Vitamin B5 (Pantothenic acid)": {"min": 3, "max": None, "unit": "mg"},
+    "Vitamin B6 (Pyridoxine)": {"min": 0.38, "max": None, "unit": "mg"},
+    "Vitamin B12 (Cyanocobalamin)": {"min": 7, "max": None, "unit": "μg"},
+    "Vitamin B3 (Niacin)": {"min": 3.4, "max": None, "unit": "mg"},
+    "Vitamin B9 (Folic acid)": {"min": 54, "max": None, "unit": "μg"},
+    "Vitamin B7 (Biotin)": {"min": 10, "max": None, "unit": "μg"},
+    "Choline": {"min": 425, "max": None, "unit": "mg"},
+    "Vitamin K": {"min": None, "max": None, "unit": "μg"},
+}
 NUTRIENTES_REFERENCIA_GATO = {
     "proteína": 60,
     "calcio": 1.2,
