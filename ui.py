@@ -3,15 +3,17 @@ import streamlit as st
 def show_mascota_form(profile, on_update_callback=None):
     mascota = profile.get("mascota", {})
 
-    # --- Imagen de la mascota ---
     col_img, col_form = st.columns([1,4])
     with col_img:
         st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
         img = st.file_uploader("Foto de la mascota", type=["png", "jpg", "jpeg"], key="foto_mascota")
+        # Mostrar imagen (del uploader o de session_state si ya existe)
         if img is not None:
-            st.session_state["foto_mascota"] = img
-        if "foto_mascota" in st.session_state and st.session_state["foto_mascota"] is not None:
-            st.image(st.session_state["foto_mascota"], width=100)
+            st.image(img, width=100)
+            # Guarda los bytes para otras pestañas, si es nuevo
+            st.session_state["foto_mascota_bytes"] = img.getvalue()
+        elif "foto_mascota_bytes" in st.session_state:
+            st.image(st.session_state["foto_mascota_bytes"], width=100)
         nombre = mascota.get("nombre", "")
         if nombre:
             st.markdown(f"<div style='text-align:center;font-weight:600;font-size:16px'>{nombre}</div>", unsafe_allow_html=True)
@@ -43,7 +45,7 @@ def show_mascota_form(profile, on_update_callback=None):
             if on_update_callback:
                 on_update_callback(profile)
 
-    # Tarjeta de resumen visual (opcional, puedes mantener solo la imagen y el nombre si lo prefieres)
+    # Tarjeta de resumen visual (opcional)
     mascota = profile.get("mascota", {})
     st.markdown(
         f"""
