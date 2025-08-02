@@ -1,7 +1,9 @@
 import streamlit as st
 
 def show_mascota_form(profile, on_update_callback=None):
-    st.header("Perfil de Mascota")
+    # Elimina o comenta la siguiente línea:
+    # st.header("Perfil de Mascota")
+
     mascota = profile.get("mascota", {})
 
     col1, col2 = st.columns([2,2])
