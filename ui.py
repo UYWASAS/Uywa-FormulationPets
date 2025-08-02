@@ -1,61 +1,24 @@
 import streamlit as st
 
-def show_sidebar(user):
-    st.sidebar.image("assets/logo.png", width=80)
-    st.sidebar.markdown(f"**Usuario:** {user['name']}")
-    if user.get("premium"):
-        st.sidebar.markdown(":star: Usuario Premium")
-    else:
-        st.sidebar.markdown(":lock: Acceso limitado")
-
-def show_main_dashboard(profile):
-    st.markdown(f"<h1>Dashboard UYWA Nutrition</h1>", unsafe_allow_html=True)
-    st.metric("Costo Dieta", f"${profile.get('last_cost', '---')}")
-    st.metric("Formulaciones Guardadas", profile.get('num_saved', 0))
-    st.metric("Premium", "Sí" if profile.get("premium") else "No")
-
-def show_tabs(ingredients_df, requirements_df, user, profile):
-    tab1, tab2, tab3, tab4 = st.tabs(["Formular", "Ingredientes", "Requerimientos", "Resultados"])
-    # Aquí irían los componentes y lógica de cada tab, llamando a las funciones de otros módulos
-
 def show_mascota_form(profile, on_update_callback=None):
     st.header("Perfil de Mascota")
+    mascota = profile.get("mascota", {})
 
-    especie = st.selectbox(
-        "Especie",
-        options=["perro", "gato"],
-        index=0 if profile.get("mascota", {}).get("especie") == "perro" else 1
-        if profile.get("mascota", {}).get("especie") == "gato" else 0
-    )
-    condicion = st.selectbox(
-        "Condición",
-        options=["cachorro", "adulto_entero", "castrado", "enfermedad"]
-    )
-    edad = st.number_input(
-        "Edad (años)",
-        min_value=0.0,
-        max_value=30.0,
-        value=float(profile.get("mascota", {}).get("edad") or 0)
-    )
-    # --- CORRECCIÓN DEL ERROR DE PESO ---
-    peso_default = profile.get("mascota", {}).get("peso")
-    if peso_default is None or float(peso_default) < 0.1:
-        peso_default = 0.1
-    peso = st.number_input(
-        "Peso (kg)",
-        min_value=0.1,
-        max_value=120.0,
-        value=float(peso_default)
-    )
-    enfermedad = ""
-    if condicion == "enfermedad":
-        enfermedad = st.text_input(
-            "Especificar enfermedad",
-            value=profile.get("mascota", {}).get("enfermedad", "")
-        )
+    col1, col2 = st.columns([2,2])
+    with col1:
+        nombre = st.text_input("Nombre de la mascota", value=mascota.get("nombre", ""))
+        especie = st.selectbox("Especie", ["perro", "gato"], index=0 if mascota.get("especie")=="perro" else 1)
+        edad = st.number_input("Edad (años)", min_value=0.0, max_value=30.0, value=float(mascota.get("edad") or 1.0))
+    with col2:
+        peso = st.number_input("Peso (kg)", min_value=0.1, max_value=120.0, value=float(mascota.get("peso") or 12.0))
+        condicion = st.selectbox("Condición", ["cachorro", "adulto_entero", "castrado", "enfermedad"], index=1)
+        enfermedad = ""
+        if condicion == "enfermedad":
+            enfermedad = st.text_input("Especificar enfermedad", value=mascota.get("enfermedad", ""))
 
     if st.button("Guardar perfil de mascota"):
         profile["mascota"] = {
+            "nombre": nombre,
             "especie": especie,
             "condicion": condicion,
             "edad": edad,
@@ -66,12 +29,17 @@ def show_mascota_form(profile, on_update_callback=None):
         if on_update_callback:
             on_update_callback(profile)
 
-    # Visualización del perfil actual
-    st.subheader("Resumen de mascota")
+    # Tarjeta de resumen visual
     mascota = profile.get("mascota", {})
-    st.write(f"**Especie:** {mascota.get('especie', '---')}")
-    st.write(f"**Condición:** {mascota.get('condicion', '---')}")
-    st.write(f"**Edad:** {mascota.get('edad', '---')} años")
-    st.write(f"**Peso:** {mascota.get('peso', '---')} kg")
-    if mascota.get("condicion") == "enfermedad":
-        st.write(f"**Enfermedad:** {mascota.get('enfermedad', '---')}")
+    st.markdown(
+        f"""
+        <div style="border-radius:12px;background:#e3ecf7;padding:18px 18px 10px 18px;margin-bottom:10px;box-shadow:0 2px 10px #adbadb33;">
+            <h3 style="margin-top:0;">{mascota.get('nombre','(Sin nombre)')}</h3>
+            <div><b>🐾 Especie:</b> {mascota.get('especie','---')}</div>
+            <div><b>🧬 Condición:</b> {mascota.get('condicion','---')}</div>
+            <div><b>🎂 Edad:</b> {mascota.get('edad','---')} años</div>
+            <div><b>⚖️ Peso:</b> {mascota.get('peso','---')} kg</div>
+            {f"<div><b>🩺 Enfermedad:</b> {mascota.get('enfermedad','---')}</div>" if mascota.get("condicion")=="enfermedad" else ""}
+        </div>
+        """, unsafe_allow_html=True
+    )
