@@ -1,36 +1,100 @@
-def calcular_requerimiento_energetico(especie, condicion, peso, edad):
+"""
+Funciones para cálculo de requerimientos energéticos para perros y gatos
+Referencia: Daily Maintenance Energy Requirements for Dogs and Cats
+
+- RER (Resting Energy Requirement): kcal/día
+  - Exponencial: RER = 70 × (peso kg ^ 0.75)   [para cualquier peso]
+  - Lineal: RER = 30 × (peso kg) + 70          [solo si 2 kg < peso < 45 kg]
+
+- MER (Maintenance Energy Requirement): kcal/día
+  - Adultos perro entero:        MER = 1.8 × RER
+  - Adultos perro castrado:      MER = 1.6 × RER
+  - Adultos perro tendencia obesidad: MER = 1.4 × RER
+  - Cachorro <4 meses:           MER = 3 × RER
+  - Cachorro >4 meses:           MER = 2 × RER
+  - Adultos gato entero:         MER = 1.4 × RER
+  - Adultos gato castrado:       MER = 1.2 × RER
+  - Adultos gato tendencia obesidad: MER = 1.0 × RER
+  - Gatito:                      MER = 2.5 × RER
+
+Notas:
+- MER es punto de partida, ajustar según respuesta individual.
+"""
+
+def calcular_rer(peso_kg, formula="auto"):
     """
-    Calcula el requerimiento energético diario según fórmulas de referencia.
-    Retorna kcal/día.
+    Retorna el RER (Resting Energy Requirement) en kcal/día.
+    formula: "auto", "exp", "lin"
+    - "auto": usa lineal si 2 < peso < 45, si no usa exponencial.
+    - "exp": siempre exponencial
+    - "lin": siempre lineal (solo si 2 < peso < 45)
     """
-    # Ejemplo: Usar fórmulas reales cuando adjuntes la tabla
+    if formula == "lin" or (formula == "auto" and 2 < peso_kg < 45):
+        rer = 30 * peso_kg + 70
+    else:
+        rer = 70 * (peso_kg ** 0.75)
+    return rer
+
+def calcular_mer(especie, condicion, peso_kg, edad_meses=None):
+    """
+    Retorna MER (Maintenance Energy Requirement) en kcal/día según especie y condición.
+    especie: "perro" o "gato"
+    condicion: ["adulto_entero", "adulto_castrado", "obesidad", "cachorro_<4m", "cachorro_>4m", "adulto_entero_gato", "adulto_castrado_gato", "obesidad_gato", "gatito"]
+    edad_meses: solo para cachorros/gatitos (opcional)
+    """
+    rer = calcular_rer(peso_kg)
+    # Perros
     if especie == "perro":
-        if condicion == "cachorro":
-            return 130 * peso ** 0.75
-        elif condicion == "adulto_entero":
-            return 110 * peso ** 0.75
-        elif condicion == "castrado":
-            return 95 * peso ** 0.75
-        elif condicion == "enfermedad":
-            # Placeholder, ajustar según la enfermedad específica
-            return 120 * peso ** 0.75
+        if condicion == "adulto_entero":
+            return 1.8 * rer
+        elif condicion == "adulto_castrado":
+            return 1.6 * rer
+        elif condicion == "obesidad":
+            return 1.4 * rer
+        elif condicion == "cachorro_<4m":
+            return 3.0 * rer
+        elif condicion == "cachorro_>4m":
+            return 2.0 * rer
+        # Si se usa edad_meses
+        if edad_meses is not None:
+            if edad_meses < 4:
+                return 3.0 * rer
+            else:
+                return 2.0 * rer
+    # Gatos
     elif especie == "gato":
-        # Ejemplo de fórmula para gatos
-        return 70 * peso ** 0.75
+        if condicion == "adulto_entero":
+            return 1.4 * rer
+        elif condicion == "adulto_castrado":
+            return 1.2 * rer
+        elif condicion == "obesidad":
+            return 1.0 * rer
+        elif condicion == "gatito":
+            return 2.5 * rer
     return None
 
-def estimar_requerimientos_nutrientes(re_energetico, especie):
+def descripcion_condiciones(especie):
     """
-    Calcula el requerimiento diario estimado de nutrientes
-    en base al RE y tablas de referencia.
-    Retorna dict: {"proteina": ..., "calcio": ..., ...}
+    Diccionario para interfaz: {etiqueta: condicion_interna}
     """
-    from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO, NUTRIENTES_REFERENCIA_GATO
     if especie == "perro":
-        ref = NUTRIENTES_REFERENCIA_PERRO
+        return {
+            "Adulto entero": "adulto_entero",
+            "Adulto castrado": "adulto_castrado",
+            "Tendencia obesidad": "obesidad",
+            "Cachorro (<4 meses)": "cachorro_<4m",
+            "Cachorro (>4 meses)": "cachorro_>4m"
+        }
+    elif especie == "gato":
+        return {
+            "Adulto entero": "adulto_entero",
+            "Adulto castrado": "adulto_castrado",
+            "Tendencia obesidad": "obesidad",
+            "Gatito": "gatito"
+        }
     else:
-        ref = NUTRIENTES_REFERENCIA_GATO
-    requerimientos = {}
-    for nutriente, por_1000kcal in ref.items():
-        requerimientos[nutriente] = re_energetico * por_1000kcal / 1000
-    return requerimientos
+        return {}
+
+# Ejemplo para UI:
+# cond_dict = descripcion_condiciones("perro")
+# st.selectbox("Condición", list(cond_dict.keys()))
