@@ -5,18 +5,19 @@ def show_mascota_form(profile, on_update_callback=None):
 
     col_img, col_form = st.columns([1,4])
     with col_img:
-        # Uploader SIEMPRE visible
-        img = st.file_uploader("Foto de la mascota", type=["png", "jpg", "jpeg"], key="foto_mascota")
-        # Si hay imagen subida en el uploader, actualiza la foto en session_state
-        if img is not None:
-            st.session_state["foto_mascota_bytes"] = img.getvalue()
-            st.session_state["foto_mascota_name"] = mascota.get("nombre", "")
-        # Mostrar imagen actual si existe
+        # Si NO hay foto, muestra uploader
+        if "foto_mascota_bytes" not in st.session_state:
+            img = st.file_uploader("Foto de la mascota", type=["png", "jpg", "jpeg"], key="foto_mascota")
+            if img is not None:
+                st.session_state["foto_mascota_bytes"] = img.getvalue()
+                st.session_state["foto_mascota_name"] = mascota.get("nombre", "")
+        # Si hay foto, solo muestra la imagen, nombre, y botón eliminar
         if "foto_mascota_bytes" in st.session_state:
             st.image(st.session_state["foto_mascota_bytes"], width=140)
             nombre = mascota.get("nombre", st.session_state.get("foto_mascota_name", ""))
             st.markdown(f"<div style='text-align:center;font-weight:600;font-size:16px'>{nombre}</div>", unsafe_allow_html=True)
-            # Botón para eliminar foto
+            # Botón pequeño para eliminar foto
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if st.button("Eliminar foto de la mascota"):
                 del st.session_state["foto_mascota_bytes"]
                 if "foto_mascota_name" in st.session_state:
@@ -48,7 +49,6 @@ def show_mascota_form(profile, on_update_callback=None):
             st.success("Perfil de mascota actualizado.")
             if on_update_callback:
                 on_update_callback(profile)
-            # Actualiza el nombre bajo la foto si ya existe
             if "foto_mascota_bytes" in st.session_state:
                 st.session_state["foto_mascota_name"] = nombre
 
