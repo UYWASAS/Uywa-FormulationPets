@@ -37,11 +37,15 @@ def show_mascota_form(profile, on_update_callback=None):
         max_value=30.0,
         value=float(profile.get("mascota", {}).get("edad") or 0)
     )
+    # --- CORRECCIÓN DEL ERROR DE PESO ---
+    peso_default = profile.get("mascota", {}).get("peso")
+    if peso_default is None or float(peso_default) < 0.1:
+        peso_default = 0.1
     peso = st.number_input(
         "Peso (kg)",
         min_value=0.1,
         max_value=120.0,
-        value=float(profile.get("mascota", {}).get("peso") or 0)
+        value=float(peso_default)
     )
     enfermedad = ""
     if condicion == "enfermedad":
