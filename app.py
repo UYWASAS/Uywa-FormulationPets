@@ -7,6 +7,8 @@ from data import load_ingredients, get_nutrient_list
 from optimization import DietFormulator
 from profile import load_profile, save_profile, update_mascota_en_perfil
 from ui import show_mascota_form
+from energy_requirements import calcular_mer, descripcion_condiciones
+from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 
 # ======================== BLOQUE 2: ESTILO Y LOGO ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
@@ -90,37 +92,54 @@ def update_and_save_profile(updated_profile):
     save_profile(user, updated_profile)
     st.session_state["profile"] = updated_profile
 
-show_mascota_form(profile, on_update_callback=update_and_save_profile)
-st.session_state["profile"] = profile  # Guarda el perfil en sesión
-
 st.markdown(f"<div style='text-align:right'>👤 Usuario: <b>{st.session_state['usuario']}</b></div>", unsafe_allow_html=True)
-
-# ======================== BLOQUE 4: UTILIDADES DE SESIÓN ========================
-def safe_float(val, default=0.0):
-    """Convierte string con coma o punto decimal a float."""
-    try:
-        if isinstance(val, str):
-            val = val.replace(",", ".")
-        return float(val)
-    except Exception:
-        return default
-
-def clean_state(keys_prefix, valid_names):
-    for key in list(st.session_state.keys()):
-        for prefix in keys_prefix:
-            if key.startswith(prefix):
-                found = False
-                for n in valid_names:
-                    if key.endswith(f"{n}_incl_input") or key.endswith(f"{n}_input"):
-                        found = True
-                        break
-                if not found:
-                    del st.session_state[key]
 
 # ======================== BLOQUE 5: TITULO Y TABS PRINCIPALES ========================
 st.title("Gestión y Análisis de Dietas")
 
-tabs = st.tabs(["Formulación", "Resultados", "Gráficos", "Comparar Escenarios"])
+tabs = st.tabs([
+    "Perfil de Mascota",  # NUEVA PESTAÑA INICIAL
+    "Formulación",
+    "Resultados",
+    "Gráficos",
+    "Comparar Escenarios"
+])
+
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
+with tabs[0]:
+    st.header("Perfil de Mascota")
+    show_mascota_form(profile, on_update_callback=update_and_save_profile)
+    mascota = st.session_state.get("profile", {}).get("mascota", {})
+    especie = mascota.get("especie", "perro")
+    condicion = mascota.get("condicion", "adulto_entero")
+    edad = mascota.get("edad", 1.0)
+    peso = mascota.get("peso", 12.0)
+
+    st.subheader("Cálculo de requerimiento energético")
+    condiciones_legibles = descripcion_condiciones(especie)
+    condicion_legible = [k for k,v in condiciones_legibles.items() if v == condicion]
+    condicion_legible = condicion_legible[0] if condicion_legible else condicion
+
+    energia = calcular_mer(especie, condicion, peso, edad_meses=edad*12)
+    if energia:
+        st.success(f"Requerimiento energético estimado (MER): {energia:.0f} kcal/día")
+    else:
+        st.warning("No se pudo calcular el requerimiento energético.")
+
+    st.subheader("Requerimientos diarios de nutrientes (proporcionales a la energía)")
+    if energia:
+        factor = energia / 1000
+        st.markdown("| Nutriente | Min | Max | Unidad |")
+        st.markdown("|---|---|---|---|")
+        for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items():
+            min_val = val["min"] * factor if val["min"] is not None else ""
+            max_val = val["max"] * factor if val["max"] is not None else ""
+            unit = val["unit"]
+            min_display = f"{min_val:.2f}" if min_val != "" else ""
+            max_display = f"{max_val:.2f}" if max_val != "" else ""
+            st.markdown(f"| {nutr} | {min_display} | {max_display} | {unit} |")
+    else:
+        st.info("Los requerimientos nutricionales se mostrarán al calcular la energía.")
 
 # ======================== BLOQUE 6: TAB FORMULACIÓN CON RATIOS Y BORRADO INDIVIDUAL ========================
 with tabs[0]:
