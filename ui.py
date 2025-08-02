@@ -11,7 +11,8 @@ def show_mascota_form(profile, on_update_callback=None):
         edad = st.number_input("Edad (años)", min_value=0.0, max_value=30.0, value=float(mascota.get("edad") or 1.0))
     with col2:
         peso = st.number_input("Peso (kg)", min_value=0.1, max_value=120.0, value=float(mascota.get("peso") or 12.0))
-        condicion = st.selectbox("Condición", ["cachorro", "adulto_entero", "castrado", "enfermedad"], index=1)
+        condicion = st.selectbox("Condición", ["cachorro", "adulto_entero", "castrado", "enfermedad"], 
+                                index=["cachorro", "adulto_entero", "castrado", "enfermedad"].index(mascota.get("condicion", "adulto_entero")))
         enfermedad = ""
         if condicion == "enfermedad":
             enfermedad = st.text_input("Especificar enfermedad", value=mascota.get("enfermedad", ""))
