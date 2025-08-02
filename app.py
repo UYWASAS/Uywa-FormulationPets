@@ -10,7 +10,7 @@ from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 
-# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL CON NOMBRE MASCOTA Y FOTO ========================
+# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL SIN FOTO/NOMBRE MASCOTA ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
 st.markdown("""
     <style>
@@ -75,12 +75,7 @@ st.markdown(f"<div style='text-align:right'>👤 Usuario: <b>{st.session_state['
 
 with st.sidebar:
     st.image("assets/logo.png", width=110)
-    mascota = profile.get("mascota", {})
-    nombre_mascota = mascota.get("nombre", "")
-    if "foto_mascota_bytes" in st.session_state:
-        st.image(st.session_state["foto_mascota_bytes"], width=60)
-    if nombre_mascota:
-        st.markdown(f"<div style='font-size:18px;font-weight:700;padding:8px 0 0 0'>🐶 {nombre_mascota}</div>", unsafe_allow_html=True)
+    # NO mostrar imagen ni nombre de mascota aquí
     st.markdown(
         """
         <div style='text-align: center; margin-bottom:10px;'>
@@ -175,8 +170,6 @@ with tabs[1]:
     st.header("Formulación de Dieta")
     mascota = st.session_state.get("profile", {}).get("mascota", {})
     nombre_mascota = mascota.get("nombre", "Mascota")
-    if "foto_mascota_bytes" in st.session_state:
-        st.image(st.session_state["foto_mascota_bytes"], width=60)
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
