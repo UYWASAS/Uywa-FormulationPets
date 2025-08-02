@@ -10,7 +10,7 @@ from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 
-# ======================== BLOQUE 2: ESTILO Y LOGO ========================
+# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL CON NOMBRE MASCOTA ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
 st.markdown("""
     <style>
@@ -36,27 +36,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
-with st.sidebar:
-    st.image("assets/logo.png", width=110)
-    st.markdown(
-        """
-        <div style='text-align: center; margin-bottom:10px;'>
-            <div style='font-size:32px;font-family:Montserrat,Arial;color:#fff; margin-top: 10px;letter-spacing:1px; font-weight:700; line-height:1.1;'>
-                UYWA-<br>NUTRITION<sup>®</sup>
-            </div>
-            <div style='font-size:16px;color:#fff; margin-top: 5px; font-family:Montserrat,Arial; line-height: 1.1;'>
-                Nutrición de Precisión Basada en Evidencia
-            </div>
-            <hr style='border-top:1px solid #2e4771; margin: 18px 0;'>
-            <div style='font-size:14px;color:#fff; margin-top: 8px;'>
-                <b>Contacto:</b> uywasas@gmail.com<br>
-                Derechos reservados © 2025
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 # ======================== BLOQUE 3: LOGIN CON ARCHIVO AUTH.PY ROBUSTO ========================
 from auth import USERS_DB
@@ -94,6 +73,53 @@ def update_and_save_profile(updated_profile):
 
 st.markdown(f"<div style='text-align:right'>👤 Usuario: <b>{st.session_state['usuario']}</b></div>", unsafe_allow_html=True)
 
+with st.sidebar:
+    st.image("assets/logo.png", width=110)
+    mascota = profile.get("mascota", {})
+    nombre_mascota = mascota.get("nombre", "")
+    if nombre_mascota:
+        st.markdown(f"<div style='font-size:18px;font-weight:700;padding:8px 0 0 0'>🐶 {nombre_mascota}</div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div style='text-align: center; margin-bottom:10px;'>
+            <div style='font-size:32px;font-family:Montserrat,Arial;color:#fff; margin-top: 10px;letter-spacing:1px; font-weight:700; line-height:1.1;'>
+                UYWA-<br>NUTRITION<sup>®</sup>
+            </div>
+            <div style='font-size:16px;color:#fff; margin-top: 5px; font-family:Montserrat,Arial; line-height: 1.1;'>
+                Nutrición de Precisión Basada en Evidencia
+            </div>
+            <hr style='border-top:1px solid #2e4771; margin: 18px 0;'>
+            <div style='font-size:14px;color:#fff; margin-top: 8px;'>
+                <b>Contacto:</b> uywasas@gmail.com<br>
+                Derechos reservados © 2025
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# ======================== BLOQUE 4: UTILIDADES DE SESIÓN ========================
+def safe_float(val, default=0.0):
+    """Convierte string con coma o punto decimal a float."""
+    try:
+        if isinstance(val, str):
+            val = val.replace(",", ".")
+        return float(val)
+    except Exception:
+        return default
+
+def clean_state(keys_prefix, valid_names):
+    for key in list(st.session_state.keys()):
+        for prefix in keys_prefix:
+            if key.startswith(prefix):
+                found = False
+                for n in valid_names:
+                    if key.endswith(f"{n}_incl_input") or key.endswith(f"{n}_input"):
+                        found = True
+                        break
+                if not found:
+                    del st.session_state[key]
+
 # ======================== BLOQUE 5: TITULO Y TABS PRINCIPALES ========================
 st.title("Gestión y Análisis de Dietas")
 
@@ -110,6 +136,7 @@ with tabs[0]:
     st.header("Perfil de Mascota")
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
+    nombre_mascota = mascota.get("nombre","Mascota")
     especie = mascota.get("especie", "perro")
     condicion = mascota.get("condicion", "adulto_entero")
     edad = mascota.get("edad", 1.0)
@@ -126,34 +153,29 @@ with tabs[0]:
     else:
         st.warning("No se pudo calcular el requerimiento energético.")
 
-    st.subheader("Requerimientos diarios de nutrientes (proporcionales a la energía)")
+    st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
     if energia:
         factor = energia / 1000
-        st.markdown("| Nutriente | Min | Max | Unidad |")
-        st.markdown("|---|---|---|---|")
-        for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items():
-            min_val = val["min"] * factor if val["min"] is not None else ""
-            max_val = val["max"] * factor if val["max"] is not None else ""
-            unit = val["unit"]
-            min_display = f"{min_val:.2f}" if min_val != "" else ""
-            max_display = f"{max_val:.2f}" if max_val != "" else ""
-            st.markdown(f"| {nutr} | {min_display} | {max_display} | {unit} |")
+        import pandas as pd
+        df_nutr = pd.DataFrame([
+            {
+                "Nutriente": nutr,
+                "Min": f"{val['min']*factor:.2f}" if val["min"] is not None else "",
+                "Max": f"{val['max']*factor:.2f}" if val["max"] is not None else "",
+                "Unidad": val["unit"]
+            }
+            for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items()
+        ])
+        st.dataframe(df_nutr, use_container_width=True, hide_index=True)
     else:
         st.info("Los requerimientos nutricionales se mostrarán al calcular la energía.")
 
-# ======================== BLOQUE 6: TAB FORMULACIÓN CON RATIOS Y BORRADO INDIVIDUAL ========================
-with tabs[0]:
+# ======================== BLOQUE 6: TAB FORMULACIÓN CON INGREDIENTES Y RATIOS ========================
+with tabs[1]:
     st.header("Formulación de Dieta")
-
-    # --- NUEVO: Mostrar datos de la mascota actual ---
-    mascota = profile.get("mascota", {})
-    st.markdown("### Perfil de Mascota Seleccionado")
-    st.write(f"**Especie:** {mascota.get('especie', '---')}")
-    st.write(f"**Condición:** {mascota.get('condicion', '---')}")
-    st.write(f"**Edad:** {mascota.get('edad', '---')} años")
-    st.write(f"**Peso:** {mascota.get('peso', '---')} kg")
-    if mascota.get("condicion") == "enfermedad":
-        st.write(f"**Enfermedad:** {mascota.get('enfermedad', '---')}")
+    mascota = st.session_state.get("profile", {}).get("mascota", {})
+    nombre_mascota = mascota.get("nombre", "Mascota")
+    st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
     # ---- 6.1 Carga de ingredientes ----
