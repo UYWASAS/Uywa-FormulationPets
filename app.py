@@ -128,7 +128,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -139,60 +139,60 @@ with tabs[0]:
     peso = mascota.get("peso", 12.0)
 
     st.subheader("Cálculo de requerimiento energético")
-    condiciones_legibles = descripcion_condiciones(especie)
-    condicion_legible = [k for k, v in condiciones_legibles.items() if v == condicion]
-    condicion_legible = condicion_legible[0] if condicion_legible else condicion
-
     energia = calcular_mer(especie, condicion, peso, edad_meses=edad * 12)
+
     if energia:
         st.success(f"Requerimiento energético estimado (MER): {energia:.0f} kcal/día")
     else:
         st.warning("No se pudo calcular el requerimiento energético.")
 
-    st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
+    st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b> (ajustados a {energia:.0f} kcal/kg)", unsafe_allow_html=True)
 
-    # ---- BLOQUE DE TRANSFORMACIÓN SEGÚN ENERGÍA ----
-    def convertir_a_porcentaje(val, unit, energia_kcal_kg):
-        if val is None:
+    # Ajusta los valores de referencia proporcionalmente a la energía de la mascota
+    def ajustar_nutriente(val_ref, energia_ref, energia_actual):
+        if val_ref is None:
             return None
-        if unit == "g/100g":
-            # ya está en porcentaje
-            return val
-        elif unit == "g/kg":
-            # g/kg a g/100g
-            return val / 10.0
-        elif unit == "g/1000kcal":
-            # g/1000kcal a g/kg, luego a g/100g
-            # val * energia (kcal/kg) / 1000 = g/kg, luego /10 = g/100g
-            return (val * energia_kcal_kg / 1000.0) / 10.0
-        else:
-            # otras unidades no se convierten, se muestran tal cual
-            return val
+        return val_ref * energia_actual / energia_ref
 
-    # Aplica la conversión solo si hay energía calculada
-    if energia:
-        requerimientos_convertidos = []
-        for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
-            min_val = convertir_a_porcentaje(info["min"], info["unit"], energia)
-            max_val = convertir_a_porcentaje(info["max"], info["unit"], energia)
-            # Para mostrar solo los valores que sí se transforman
-            unidad_mostrar = "%" if info["unit"] in ["g/100g", "g/kg", "g/1000kcal"] else info["unit"]
-            requerimientos_convertidos.append({
+    energia_ref = 1000  # La referencia del dict es para 1000 kcal/kg
+
+    requerimientos_ajustados = []
+    for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
+        unidad = info["unit"]
+        # Solo ajusta si es g/100g o g/kg
+        if unidad in ["g/100g", "g/kg"]:
+            min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
+            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
+            requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": min_val,
-                "Max": max_val,
-                "Unidad": unidad_mostrar
+                "Min": min_aj,
+                "Max": max_aj,
+                "Unidad": unidad
             })
-        df_nutr = pd.DataFrame(requerimientos_convertidos)
-        st.dataframe(df_nutr, use_container_width=True, hide_index=True)
-        # Guarda los requerimientos convertidos para la formulación
-        st.session_state["nutrientes_requeridos"] = {
-            row["Nutriente"]: {"min": row["Min"], "max": row["Max"], "unit": row["Unidad"]}
-            for _, row in df_nutr.iterrows()
-        }
-    else:
-        st.info("Los requerimientos nutricionales se mostrarán al calcular la energía.")
-        
+        else:
+            # Energía metabolizable: muestra el valor calculado
+            if "energía metabolizable" in nutr.lower() and "kcal/kg" in unidad:
+                requerimientos_ajustados.append({
+                    "Nutriente": nutr,
+                    "Min": energia,
+                    "Max": None,
+                    "Unidad": unidad
+                })
+            else:
+                requerimientos_ajustados.append({
+                    "Nutriente": nutr,
+                    "Min": info["min"],
+                    "Max": info["max"],
+                    "Unidad": unidad
+                })
+
+    df_nutr = pd.DataFrame(requerimientos_ajustados)
+    st.dataframe(df_nutr, use_container_width=True, hide_index=True)
+    st.session_state["nutrientes_requeridos"] = {
+        row["Nutriente"]: {"min": row["Min"], "max": row["Max"], "unit": row["Unidad"]}
+        for _, row in df_nutr.iterrows()
+    }
+    
 # ======================== BLOQUE 6: TAB FORMULACIÓN CON INGREDIENTES Y RATIOS ========================
 with tabs[1]:
     st.header("Formulación de Dieta")
