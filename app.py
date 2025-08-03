@@ -153,7 +153,7 @@ with tabs[0]:
     if energia:
         factor = energia / 1000
 
-        # === TRANSFORMACIÓN DE LA REFERENCIA A PORCENTAJE ===
+        # TRANSFORMAR REFERENCIA A PORCENTAJE (%)
         nutrientes_ref_porcentaje = transformar_referencia_a_porcentaje(NUTRIENTES_REFERENCIA_PERRO)
 
         def is_number(val):
