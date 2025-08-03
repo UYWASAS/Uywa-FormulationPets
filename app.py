@@ -150,30 +150,47 @@ with tabs[0]:
         st.warning("No se pudo calcular el requerimiento energético.")
 
     st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
+
+    # ---- BLOQUE DE TRANSFORMACIÓN A % (g/100g) ----
+    def to_percent(val, unit, energia):
+        if unit == "g/100g":
+            # ya está en %
+            return val
+        elif unit == "g/kg":
+            # g/kg a g/100g
+            return val / 10
+        elif unit == "g/1000kcal":
+            # g/1000kcal a g/kg, luego a g/100g
+            val_gkg = val * energia / 1000
+            return val_gkg / 10
+        else:
+            return val
+
+    def convert_nutrient_reference(nutrientes_ref, energia):
+        out = {}
+        for nutr, info in nutrientes_ref.items():
+            min_val = info["min"]
+            max_val = info["max"]
+            unit = info["unit"]
+            # Solo convierte si es valor numérico
+            min_conv = to_percent(min_val, unit, energia) if isinstance(min_val, (int, float)) else min_val
+            max_conv = to_percent(max_val, unit, energia) if isinstance(max_val, (int, float)) else max_val
+            out[nutr] = {
+                "min": min_conv,
+                "max": max_conv,
+                "unit": "%"
+            }
+        return out
+
     if energia:
-        factor = energia / 1000
-
-        # TRANSFORMAR REFERENCIA A PORCENTAJE (%)
-        nutrientes_ref_porcentaje = transformar_referencia_a_porcentaje(NUTRIENTES_REFERENCIA_PERRO)
-
-        def is_number(val):
-            try:
-                float(val)
-                return True
-            except Exception:
-                return False
-
-        def safe_numeric_mult(val, factor):
-            try:
-                return float(val) * factor
-            except Exception:
-                return val
+        # Aplica la transformación y muestra como porcentaje
+        nutrientes_ref_porcentaje = convert_nutrient_reference(NUTRIENTES_REFERENCIA_PERRO, energia)
 
         df_nutr = pd.DataFrame([
             {
                 "Nutriente": nutr,
-                "Min": safe_numeric_mult(val['min'], factor) if is_number(val["min"]) else val["min"],
-                "Max": safe_numeric_mult(val['max'], factor) if is_number(val["max"]) else val["max"],
+                "Min": val["min"],
+                "Max": val["max"],
                 "Unidad": val["unit"]
             }
             for nutr, val in nutrientes_ref_porcentaje.items()
