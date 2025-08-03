@@ -128,7 +128,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS, NOMBRES EM/EM_1) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS, EM y EM_1) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -148,7 +148,6 @@ with tabs[0]:
 
     st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b> (ajustados a {energia:.0f} kcal/kg)", unsafe_allow_html=True)
 
-    # Ajusta los valores de referencia proporcionalmente a la energía de la mascota
     def ajustar_nutriente(val_ref, energia_ref, energia_actual):
         if val_ref is None:
             return None
@@ -167,12 +166,14 @@ with tabs[0]:
                 "Max": None,
                 "Unidad": unidad
             })
-        # EM_1 mantiene valor de referencia (no se ajusta, es constante)
+        # EM_1 también debe ajustarse proporcionalmente
         elif nutr == "EM_1" and unidad == "kcal/g":
+            min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
+            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": info["min"],
-                "Max": info["max"],
+                "Min": min_aj,
+                "Max": max_aj,
                 "Unidad": unidad
             })
         # Ajusta g/100g o g/kg proporcionalmente
