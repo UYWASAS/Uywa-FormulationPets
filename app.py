@@ -879,7 +879,7 @@ with tabs[2]:
             else:
                 st.info("Selecciona al menos un nutriente para visualizar los aportes por ingrediente.")
 
-        # ---------- SUBTAB 3: Precio sombra por nutriente ----------
+              # ---------- SUBTAB 3: Precio sombra por nutriente ----------
         with subtab3:
             unit_options = {
                 'kg': ['kg', 'ton'],
@@ -920,9 +920,15 @@ with tabs[2]:
                             "Precio ingrediente (USD/kg)": [fmt2(p) for p in precios_ing],
                         })
                         precios_unit_np = np.array([v if pd.notnull(v) else np.inf for v in precios_unit])
-                        min_idx = int(np.nanargmin(precios_unit_np))
-                        df_shadow["Es el más barato"] = ["✅" if i == min_idx else "" for i in range(len(df_shadow))]
-                        bar_colors = ['green' if i == min_idx else 'royalblue' for i in range(len(df_shadow))]
+                        # FIX: verifica si hay algún valor finito antes de nanargmin
+                        if len(precios_unit_np) > 0 and np.isfinite(precios_unit_np).any():
+                            min_idx = int(np.nanargmin(precios_unit_np))
+                            df_shadow["Es el más barato"] = ["✅" if i == min_idx else "" for i in range(len(df_shadow))]
+                            bar_colors = ['green' if i == min_idx else 'royalblue' for i in range(len(df_shadow))]
+                        else:
+                            min_idx = None
+                            df_shadow["Es el más barato"] = ["" for _ in range(len(df_shadow))]
+                            bar_colors = ['royalblue' for _ in range(len(df_shadow))]
                         fig_shadow = go.Figure()
                         fig_shadow.add_trace(go.Bar(
                             x=df_shadow["Ingrediente"],
@@ -948,23 +954,6 @@ with tabs[2]:
                         )
             else:
                 st.info("Selecciona al menos un nutriente para visualizar el precio sombra por ingrediente.")
-        st.markdown("---")
-        escenarios = cargar_escenarios()
-        nombre_escenario = st.text_input("Nombre para guardar este escenario", value="Escenario " + str(len(escenarios)+1), key="nombre_escenario")
-        if st.button("Guardar escenario"):
-            escenario = {
-                "nombre": nombre_escenario,
-                "ingredientes": ingredientes_seleccionados,
-                "nutrientes": nutrientes_seleccionados,
-                "data_formula": df_formula.to_dict(),
-                "unidades_dict": unidades_dict,
-                "costo_total": fmt2(total_cost),
-            }
-            escenarios.append(escenario)
-            guardar_escenarios(escenarios)
-            st.success(f"Escenario '{nombre_escenario}' guardado exitosamente.")
-    else:
-        st.info("No hay resultados para graficar. Formula primero una dieta.")
 
 # ======================== BLOQUE 9: COMPARADOR DE ESCENARIOS AVANZADO ========================
 with tabs[3]:
