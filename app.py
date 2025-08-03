@@ -130,7 +130,7 @@ tabs = st.tabs([
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
-    nombre_mascota = mascota.get("nombre","Mascota")
+    nombre_mascota = mascota.get("nombre", "Mascota")
     especie = mascota.get("especie", "perro")
     condicion = mascota.get("condicion", "adulto_entero")
     edad = mascota.get("edad", 1.0)
@@ -138,10 +138,10 @@ with tabs[0]:
 
     st.subheader("Cálculo de requerimiento energético")
     condiciones_legibles = descripcion_condiciones(especie)
-    condicion_legible = [k for k,v in condiciones_legibles.items() if v == condicion]
+    condicion_legible = [k for k, v in condiciones_legibles.items() if v == condicion]
     condicion_legible = condicion_legible[0] if condicion_legible else condicion
 
-    energia = calcular_mer(especie, condicion, peso, edad_meses=edad*12)
+    energia = calcular_mer(especie, condicion, peso, edad_meses=edad * 12)
     if energia:
         st.success(f"Requerimiento energético estimado (MER): {energia:.0f} kcal/día")
     else:
@@ -150,11 +150,25 @@ with tabs[0]:
     st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
     if energia:
         factor = energia / 1000
+
+        def is_number(val):
+            try:
+                float(val)
+                return True
+            except Exception:
+                return False
+
+        def safe_numeric_mult(val, factor):
+            try:
+                return float(val) * factor
+            except Exception:
+                return val
+
         df_nutr = pd.DataFrame([
             {
                 "Nutriente": nutr,
-                "Min": val['min']*factor if val["min"] is not None else None,
-                "Max": val['max']*factor if val["max"] is not None else None,
+                "Min": safe_numeric_mult(val['min'], factor) if is_number(val["min"]) else val["min"],
+                "Max": safe_numeric_mult(val['max'], factor) if is_number(val["max"]) else val["max"],
                 "Unidad": val["unit"]
             }
             for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items()
@@ -167,7 +181,7 @@ with tabs[0]:
         }
     else:
         st.info("Los requerimientos nutricionales se mostrarán al calcular la energía.")
-
+        
 # ======================== BLOQUE 6: TAB FORMULACIÓN CON INGREDIENTES Y RATIOS ========================
 with tabs[1]:
     st.header("Formulación de Dieta")
