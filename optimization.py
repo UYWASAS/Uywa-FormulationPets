@@ -2,7 +2,16 @@ import pulp
 import pandas as pd
 
 class DietFormulator:
-    def __init__(self, ingredients_df, nutrient_list, requirements, limits=None, selected_species=None, selected_stage=None, ratios=None):
+    def __init__(
+        self,
+        ingredients_df,
+        nutrient_list,
+        requirements,
+        limits=None,
+        selected_species=None,
+        selected_stage=None,
+        ratios=None
+    ):
         """
         ingredients_df: DataFrame con columnas de nutrientes, precio e 'Ingrediente'
         nutrient_list: lista de nombres de nutrientes a optimizar y analizar
@@ -32,16 +41,19 @@ class DietFormulator:
         ingredient_vars = pulp.LpVariable.dicts(
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
-        prob += pulp.lpSum(
-            [self.ingredients_df.loc[i, "precio"] * ingredient_vars[i] for i in self.ingredients_df.index]
-        ), "Total_Cost"
+        # Coste total objetivo
+        prob += pulp.lpSum([
+            float(self.ingredients_df.loc[i, "precio"]) * ingredient_vars[i]
+            for i in self.ingredients_df.index
+        ]), "Total_Cost"
+        # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
         # Límites de inclusión por ingrediente
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
-            min_inc = self.limits["min"].get(ing_name, 0) / 100
-            max_inc = self.limits["max"].get(ing_name, 100) / 100
+            min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
+            max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
             prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
@@ -53,20 +65,24 @@ class DietFormulator:
             try:
                 min_val = float(min_val)
             except Exception:
-                min_val = 0
+                min_val = 0.0
             try:
                 max_val = float(max_val)
             except Exception:
-                max_val = 0
+                max_val = 0.0
 
-            if min_val != 0:
-                prob += pulp.lpSum(
-                    [self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]
-                ) >= min_val, f"Min_{nutrient}"
-            if max_val != 0:
-                prob += pulp.lpSum(
-                    [self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]
-                ) <= max_val, f"Max_{nutrient}"
+            if min_val != 0.0:
+                prob += pulp.lpSum([
+                    float(self.ingredients_df.loc[i, nutrient]) * ingredient_vars[i]
+                    for i in self.ingredients_df.index
+                    if nutrient in self.ingredients_df.columns
+                ]) >= min_val, f"Min_{nutrient}"
+            if max_val != 0.0:
+                prob += pulp.lpSum([
+                    float(self.ingredients_df.loc[i, nutrient]) * ingredient_vars[i]
+                    for i in self.ingredients_df.index
+                    if nutrient in self.ingredients_df.columns
+                ]) <= max_val, f"Max_{nutrient}"
 
         # === RESTRICCIONES DE RATIOS ENTRE NUTRIENTES ===
         for idx, ratio in enumerate(self.ratios):
@@ -79,11 +95,17 @@ class DietFormulator:
             if num not in self.ingredients_df.columns or den not in self.ingredients_df.columns:
                 continue  # omitir ratio no válido
 
-            expr_num = pulp.lpSum([self.ingredients_df.loc[i, num] * ingredient_vars[i] for i in self.ingredients_df.index])
-            expr_den = pulp.lpSum([self.ingredients_df.loc[i, den] * ingredient_vars[i] for i in self.ingredients_df.index])
+            expr_num = pulp.lpSum([
+                float(self.ingredients_df.loc[i, num]) * ingredient_vars[i]
+                for i in self.ingredients_df.index
+            ])
+            expr_den = pulp.lpSum([
+                float(self.ingredients_df.loc[i, den]) * ingredient_vars[i]
+                for i in self.ingredients_df.index
+            ])
 
             # Ratio linealizado: num - val*den {op} 0
-            lhs = expr_num - val * expr_den
+            lhs = expr_num - float(val) * expr_den
             cname = f"Ratio_{num}_{op}_{val}_{den}_{idx}"
             if op == ">=":
                 prob += lhs >= 0, cname
@@ -95,11 +117,6 @@ class DietFormulator:
                 prob += lhs <= -1e-6, cname
             elif op == "=":
                 prob += lhs == 0, cname
-            # (otros operadores pueden añadirse si se requieren)
-
-        # ============= DIAGNÓSTICO DESACTIVADO =============
-        # (Bloque de prints removido para producción)
-        # ===================================================
 
         prob.solve()
         diet = {}
@@ -109,11 +126,11 @@ class DietFormulator:
 
         if pulp.LpStatus[prob.status] == "Optimal":
             for i in self.ingredients_df.index:
-                amount = ingredient_vars[i].varValue * 100
+                amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
                 if amount > 0:
                     ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
                     diet[ingredient_name] = round(amount, 4)
-                    total_cost += self.ingredients_df.loc[i, "precio"] * (amount / 100) * 100
+                    total_cost += float(self.ingredients_df.loc[i, "precio"]) * (amount / 100) * 100
             total_cost = round(total_cost, 2)
 
             # SIEMPRE calcular todos los nutrientes seleccionados, tengan o no restricción
@@ -121,14 +138,14 @@ class DietFormulator:
                 valor_nut = 0
                 if nutrient in self.ingredients_df.columns:
                     for i in self.ingredients_df.index:
-                        amount = ingredient_vars[i].varValue * 100
+                        amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
                         nut_val = self.ingredients_df.loc[i, nutrient]
                         try:
                             nut_val = float(nut_val)
                         except Exception:
-                            nut_val = 0
+                            nut_val = 0.0
                         if pd.isna(nut_val):
-                            nut_val = 0
+                            nut_val = 0.0
                         valor_nut += nut_val * (amount / 100)
                 nutritional_values[nutrient] = round(valor_nut, 4)
 
@@ -138,19 +155,25 @@ class DietFormulator:
                 req_min = req.get("min", "")
                 req_max = req.get("max", "")
                 obtenido = nutritional_values.get(nutrient, None)
-                # Determinar estado
+                estado = "Sin restricción"
                 if req_min or req_max:
-                    if req_min and req_max:
-                        estado = "Cumple" if (obtenido >= req_min) and (req_max == 0 or obtenido <= req_max) \
-                            else ("Exceso" if (req_max != 0 and obtenido > req_max) else "Deficiente")
-                    elif req_min:
-                        estado = "Cumple" if obtenido >= req_min else "Deficiente"
-                    elif req_max:
-                        estado = "Cumple" if obtenido <= req_max else "Exceso"
+                    try:
+                        req_min_f = float(req_min) if req_min != "" else None
+                    except Exception:
+                        req_min_f = None
+                    try:
+                        req_max_f = float(req_max) if req_max != "" else None
+                    except Exception:
+                        req_max_f = None
+                    if req_min_f is not None and req_max_f is not None:
+                        estado = "Cumple" if (obtenido >= req_min_f) and (req_max_f == 0 or obtenido <= req_max_f) \
+                            else ("Exceso" if (req_max_f != 0 and obtenido > req_max_f) else "Deficiente")
+                    elif req_min_f is not None:
+                        estado = "Cumple" if obtenido >= req_min_f else "Deficiente"
+                    elif req_max_f is not None:
+                        estado = "Cumple" if obtenido <= req_max_f else "Exceso"
                     else:
                         estado = "No definido"
-                else:
-                    estado = "Sin restricción"
                 compliance_data.append({
                     "Nutriente": nutrient,
                     "Mínimo": req_min,
