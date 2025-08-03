@@ -75,7 +75,6 @@ st.markdown(f"<div style='text-align:right'>👤 Usuario: <b>{st.session_state['
 
 with st.sidebar:
     st.image("assets/logo.png", width=110)
-    # NO mostrar imagen ni nombre de mascota aquí
     st.markdown(
         """
         <div style='text-align: center; margin-bottom:10px;'>
@@ -97,7 +96,6 @@ with st.sidebar:
 
 # ======================== BLOQUE 4: UTILIDADES DE SESIÓN ========================
 def safe_float(val, default=0.0):
-    """Convierte string con coma o punto decimal a float."""
     try:
         if isinstance(val, str):
             val = val.replace(",", ".")
@@ -246,6 +244,7 @@ with tabs[1]:
                             label="",
                             min_value=0.0,
                             max_value=100.0,
+                            value=0.0,
                             key=key_max,
                             format="%.2f",
                             help="Valor máximo requerido (%)"
@@ -260,11 +259,11 @@ with tabs[1]:
                             help=min_placeholder,
                             placeholder=min_placeholder
                         )
-                        min_val = safe_float(min_val_raw, 0)
+                        min_val = safe_float(min_val_raw, 0.0)
                     min_limits[ing] = min_val
-                    max_limits[ing] = safe_float(max_val, 0)
+                    max_limits[ing] = max_val
                     st.session_state[f"min_{ing}"] = min_val
-                    st.session_state[f"max_{ing}"] = safe_float(max_val, 0)
+                    st.session_state[f"max_{ing}"] = max_val
 
         # ---- 6.3 Edición de ingredientes seleccionados ----
         if ingredientes_sel:
@@ -311,30 +310,32 @@ with tabs[1]:
                 st.markdown(f"**{nutriente}**")
             with cols[1]:
                 key_min = f"nutriente_min_{nutriente}"
-                valor_min = requeridos.get(nutriente, {}).get("min", 0) if requeridos else 0
+                valor_min = requeridos.get(nutriente, {}).get("min", 0.0) if requeridos else 0.0
+                valor_min_float = safe_float(valor_min, 0.0)
                 min_val = st.number_input(
                     label="",
                     min_value=0.0,
                     max_value=1e9,
-                    value=valor_min if valor_min else 0,
+                    value=valor_min_float,
                     key=key_min,
                     format="%.2f",
                     help="Valor mínimo requerido"
                 )
             with cols[2]:
                 key_max = f"nutriente_max_{nutriente}"
-                valor_max = requeridos.get(nutriente, {}).get("max", 0) if requeridos else 0
+                valor_max = requeridos.get(nutriente, {}).get("max", 0.0) if requeridos else 0.0
+                valor_max_float = safe_float(valor_max, 0.0)
                 max_placeholder = "Opcional: ingresa valor máximo si aplica"
                 max_val_raw = st.text_input(
                     label="",
-                    value=str(valor_max) if valor_max else "",
+                    value=str(valor_max_float) if valor_max_float else "",
                     key=key_max,
                     help=max_placeholder,
                     placeholder=max_placeholder
                 )
-                max_val = safe_float(max_val_raw, 0)
-            nutrientes_data[nutriente] = {"min": safe_float(min_val, 0), "max": max_val}
-            st.session_state[f"min_{nutriente}"] = safe_float(min_val, 0)
+                max_val = safe_float(max_val_raw, 0.0)
+            nutrientes_data[nutriente] = {"min": min_val, "max": max_val}
+            st.session_state[f"min_{nutriente}"] = min_val
             st.session_state[f"max_{nutriente}"] = max_val
 
         req_input = nutrientes_data
