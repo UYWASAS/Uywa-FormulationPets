@@ -151,52 +151,41 @@ with tabs[0]:
 
     st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b>", unsafe_allow_html=True)
 
-    # ---- BLOQUE DE TRANSFORMACIÓN A % (g/100g) ----
-    def to_percent(val, unit, energia):
+    # ---- BLOQUE DE TRANSFORMACIÓN SEGÚN ENERGÍA ----
+    def convertir_a_porcentaje(val, unit, energia_kcal_kg):
+        if val is None:
+            return None
         if unit == "g/100g":
-            # ya está en %
+            # ya está en porcentaje
             return val
         elif unit == "g/kg":
             # g/kg a g/100g
-            return val / 10
+            return val / 10.0
         elif unit == "g/1000kcal":
             # g/1000kcal a g/kg, luego a g/100g
-            val_gkg = val * energia / 1000
-            return val_gkg / 10
+            # val * energia (kcal/kg) / 1000 = g/kg, luego /10 = g/100g
+            return (val * energia_kcal_kg / 1000.0) / 10.0
         else:
+            # otras unidades no se convierten, se muestran tal cual
             return val
 
-    def convert_nutrient_reference(nutrientes_ref, energia):
-        out = {}
-        for nutr, info in nutrientes_ref.items():
-            min_val = info["min"]
-            max_val = info["max"]
-            unit = info["unit"]
-            # Solo convierte si es valor numérico
-            min_conv = to_percent(min_val, unit, energia) if isinstance(min_val, (int, float)) else min_val
-            max_conv = to_percent(max_val, unit, energia) if isinstance(max_val, (int, float)) else max_val
-            out[nutr] = {
-                "min": min_conv,
-                "max": max_conv,
-                "unit": "%"
-            }
-        return out
-
+    # Aplica la conversión solo si hay energía calculada
     if energia:
-        # Aplica la transformación y muestra como porcentaje
-        nutrientes_ref_porcentaje = convert_nutrient_reference(NUTRIENTES_REFERENCIA_PERRO, energia)
-
-        df_nutr = pd.DataFrame([
-            {
+        requerimientos_convertidos = []
+        for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
+            min_val = convertir_a_porcentaje(info["min"], info["unit"], energia)
+            max_val = convertir_a_porcentaje(info["max"], info["unit"], energia)
+            # Para mostrar solo los valores que sí se transforman
+            unidad_mostrar = "%" if info["unit"] in ["g/100g", "g/kg", "g/1000kcal"] else info["unit"]
+            requerimientos_convertidos.append({
                 "Nutriente": nutr,
-                "Min": val["min"],
-                "Max": val["max"],
-                "Unidad": val["unit"]
-            }
-            for nutr, val in nutrientes_ref_porcentaje.items()
-        ])
+                "Min": min_val,
+                "Max": max_val,
+                "Unidad": unidad_mostrar
+            })
+        df_nutr = pd.DataFrame(requerimientos_convertidos)
         st.dataframe(df_nutr, use_container_width=True, hide_index=True)
-        # Guardar los requerimientos en session_state para usarlos en la formulación
+        # Guarda los requerimientos convertidos para la formulación
         st.session_state["nutrientes_requeridos"] = {
             row["Nutriente"]: {"min": row["Min"], "max": row["Max"], "unit": row["Unidad"]}
             for _, row in df_nutr.iterrows()
