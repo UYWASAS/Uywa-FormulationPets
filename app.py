@@ -128,7 +128,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS, NOMBRES EM/EM_1) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -159,8 +159,24 @@ with tabs[0]:
     requerimientos_ajustados = []
     for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
         unidad = info["unit"]
-        # Solo ajusta si es g/100g o g/kg
-        if unidad in ["g/100g", "g/kg"]:
+        # EM ajusta mostrando valor calculado y nombre correcto
+        if nutr == "EM" and unidad == "kcal/kg":
+            requerimientos_ajustados.append({
+                "Nutriente": nutr,
+                "Min": energia,
+                "Max": None,
+                "Unidad": unidad
+            })
+        # EM_1 mantiene valor de referencia (no se ajusta, es constante)
+        elif nutr == "EM_1" and unidad == "kcal/g":
+            requerimientos_ajustados.append({
+                "Nutriente": nutr,
+                "Min": info["min"],
+                "Max": info["max"],
+                "Unidad": unidad
+            })
+        # Ajusta g/100g o g/kg proporcionalmente
+        elif unidad in ["g/100g", "g/kg"]:
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
             requerimientos_ajustados.append({
@@ -170,21 +186,12 @@ with tabs[0]:
                 "Unidad": unidad
             })
         else:
-            # Energía metabolizable: muestra el valor calculado
-            if "energía metabolizable" in nutr.lower() and "kcal/kg" in unidad:
-                requerimientos_ajustados.append({
-                    "Nutriente": nutr,
-                    "Min": energia,
-                    "Max": None,
-                    "Unidad": unidad
-                })
-            else:
-                requerimientos_ajustados.append({
-                    "Nutriente": nutr,
-                    "Min": info["min"],
-                    "Max": info["max"],
-                    "Unidad": unidad
-                })
+            requerimientos_ajustados.append({
+                "Nutriente": nutr,
+                "Min": info["min"],
+                "Max": info["max"],
+                "Unidad": unidad
+            })
 
     df_nutr = pd.DataFrame(requerimientos_ajustados)
     st.dataframe(df_nutr, use_container_width=True, hide_index=True)
