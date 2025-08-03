@@ -155,13 +155,18 @@ with tabs[0]:
         df_nutr = pd.DataFrame([
             {
                 "Nutriente": nutr,
-                "Min": f"{val['min']*factor:.2f}" if val["min"] is not None else "",
-                "Max": f"{val['max']*factor:.2f}" if val["max"] is not None else "",
+                "Min": val['min']*factor if val["min"] is not None else None,
+                "Max": val['max']*factor if val["max"] is not None else None,
                 "Unidad": val["unit"]
             }
             for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items()
         ])
         st.dataframe(df_nutr, use_container_width=True, hide_index=True)
+        # Guardar los requerimientos en session_state para usarlos en la formulación
+        st.session_state["nutrientes_requeridos"] = {
+            row["Nutriente"]: {"min": row["Min"], "max": row["Max"], "unit": row["Unidad"]}
+            for _, row in df_nutr.iterrows()
+        }
     else:
         st.info("Los requerimientos nutricionales se mostrarán al calcular la energía.")
 
@@ -298,26 +303,31 @@ with tabs[1]:
             st.markdown("**Max (opcional)**")
 
         nutrientes_data = {}
+        # Si hay requerimientos guardados, usarlos como valor inicial
+        requeridos = st.session_state.get("nutrientes_requeridos", {})
         for nutriente in nutrientes_seleccionados:
             cols = st.columns([2, 1, 1])
             with cols[0]:
                 st.markdown(f"**{nutriente}**")
             with cols[1]:
                 key_min = f"nutriente_min_{nutriente}"
+                valor_min = requeridos.get(nutriente, {}).get("min", 0) if requeridos else 0
                 min_val = st.number_input(
                     label="",
                     min_value=0.0,
                     max_value=1e9,
+                    value=valor_min if valor_min else 0,
                     key=key_min,
                     format="%.2f",
                     help="Valor mínimo requerido"
                 )
             with cols[2]:
                 key_max = f"nutriente_max_{nutriente}"
+                valor_max = requeridos.get(nutriente, {}).get("max", 0) if requeridos else 0
                 max_placeholder = "Opcional: ingresa valor máximo si aplica"
                 max_val_raw = st.text_input(
                     label="",
-                    value="",
+                    value=str(valor_max) if valor_max else "",
                     key=key_max,
                     help=max_placeholder,
                     placeholder=max_placeholder
