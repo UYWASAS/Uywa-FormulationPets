@@ -126,6 +126,8 @@ tabs = st.tabs([
     "Comparar Escenarios"
 ])
 
+from nutrient_tools import transformar_referencia_a_porcentaje
+
 # ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
@@ -151,6 +153,9 @@ with tabs[0]:
     if energia:
         factor = energia / 1000
 
+        # === TRANSFORMACIÓN DE LA REFERENCIA A PORCENTAJE ===
+        nutrientes_ref_porcentaje = transformar_referencia_a_porcentaje(NUTRIENTES_REFERENCIA_PERRO)
+
         def is_number(val):
             try:
                 float(val)
@@ -171,7 +176,7 @@ with tabs[0]:
                 "Max": safe_numeric_mult(val['max'], factor) if is_number(val["max"]) else val["max"],
                 "Unidad": val["unit"]
             }
-            for nutr, val in NUTRIENTES_REFERENCIA_PERRO.items()
+            for nutr, val in nutrientes_ref_porcentaje.items()
         ])
         st.dataframe(df_nutr, use_container_width=True, hide_index=True)
         # Guardar los requerimientos en session_state para usarlos en la formulación
