@@ -421,44 +421,44 @@ with tabs[1]:
         elif not ingredientes_df.empty:
             st.session_state["ingredients_df"] = ingredientes_df.copy()
 
-        # ---- 6.8 Formulable y botón ----
-        formulable = not ingredientes_df_filtrado.empty and nutrientes_seleccionados
+       # ---- 6.8 Formulable y botón ----
+formulable = not ingredientes_df_filtrado.empty and nutrientes_seleccionados
 
-        def is_zero(val):
-            try:
-                f = float(val)
-                return abs(f) < 1e-8
-            except Exception:
-                return True
+def is_zero(val):
+    try:
+        f = float(val)
+        return abs(f) < 1e-8
+    except Exception:
+        return True
 
-        if formulable and all(is_zero(v.get("min", 0)) and is_zero(v.get("max", 0)) for v in req_input.values()):
-            st.warning("¡Advertencia! No hay restricciones nutricionales activas. La fórmula resultante puede ser solo el ingrediente más barato.")
+if formulable and all(is_zero(v.get("min", 0)) and is_zero(v.get("max", 0)) for v in req_input.values()):
+    st.warning("¡Advertencia! No hay restricciones nutricionales activas. La fórmula resultante puede ser solo el ingrediente más barato.")
 
-        if formulable:
-            if st.button("Formular dieta óptima"):
-                formulator = DietFormulator(
-                    ingredientes_df_filtrado,
-                    nutrientes_seleccionados,
-                    req_input,
-                    limits={"min": {}, "max": max_limits},  # solo aplica máximos como restricción dura
-                    selected_species=None,
-                    selected_stage=None,
-                    ratios=st.session_state.get("ratios", []),
-                    min_selected_ingredients=min_selected_ingredients,
-                    diet_type=tipo_dieta
-                )
-                result = formulator.solve()
-                if result["success"]:
-                    st.session_state["last_diet"] = result["diet"]
-                    st.session_state["last_cost"] = result["cost"]
-                    st.session_state["last_nutritional_values"] = result["nutritional_values"]
-                    st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
-                    st.success("¡Formulación realizada!")
-                else:
-                    st.error("No se pudo formular la dieta: " + result.get("message", "Error desconocido"))
+if formulable:
+    if st.button("Formular dieta óptima"):
+        formulator = DietFormulator(
+            ingredientes_df_filtrado,
+            nutrientes_seleccionados,
+            req_input,
+            limits={"min": min_limits, "max": max_limits},  # <-- CORRECTO
+            selected_species=None,
+            selected_stage=None,
+            ratios=st.session_state.get("ratios", []),
+            min_selected_ingredients=min_selected_ingredients,
+            diet_type=tipo_dieta
+        )
+        result = formulator.solve()
+        if result["success"]:
+            st.session_state["last_diet"] = result["diet"]
+            st.session_state["last_cost"] = result["cost"]
+            st.session_state["last_nutritional_values"] = result["nutritional_values"]
+            st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
+            st.success("¡Formulación realizada!")
         else:
-            st.info("Carga los ingredientes, selecciona y edita, luego configura nutrientes para comenzar.")
-
+            st.error("No se pudo formular la dieta: " + result.get("message", "Error desconocido"))
+else:
+    st.info("Carga los ingredientes, selecciona y edita, luego configura nutrientes para comenzar.")
+    
 # ======================== BLOQUE 7: TAB RESULTADOS CON DIAGNÓSTICO Y CUMPLIMIENTO DE INCLUSIÓN MÍNIMA ========================
 with tabs[2]:
     st.header("Resultados de la formulación")
