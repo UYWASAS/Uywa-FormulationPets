@@ -96,6 +96,8 @@ with st.sidebar:
     )
 
 # ======================== BLOQUE 4: UTILIDADES DE SESIÓN ========================
+
+valor_redondeado = fmt2(valor_original)
 def safe_float(val, default=0.0):
     try:
         if isinstance(val, str):
