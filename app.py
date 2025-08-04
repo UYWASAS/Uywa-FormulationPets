@@ -359,122 +359,83 @@ with tabs[2]:
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
     
-# ======================== BLOQUE 7: TAB RESULTADOS CON DIAGNÓSTICO Y CUMPLIMIENTO DE INCLUSIÓN MÍNIMA ========================
+# ======================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA ========================
+
 with tabs[2]:
-    st.header("Resultados de la formulación")
+    st.header("Resultados de la formulación automática")
+    
+    # Recupera los datos de la última formulación
     diet = st.session_state.get("last_diet", None)
     total_cost = st.session_state.get("last_cost", 0)
     nutritional_values = st.session_state.get("last_nutritional_values", {})
     min_inclusion_status = st.session_state.get("min_inclusion_status", [])
-    req_input = st.session_state.get("req_input", {})
-    nutrientes_seleccionados = st.session_state.get("nutrientes_seleccionados", [])
-    ingredients_df = st.session_state.get("ingredients_df", None)
-    ratios = st.session_state.get("ratios", [])
-
-    def emoji_estado(minimo, maximo, obtenido):
-        if pd.isna(obtenido): return ""
-        if maximo and obtenido > maximo:
-            return "⬆️"
-        if minimo and obtenido < minimo:
-            return "❌"
-        if minimo or maximo:
-            return "✅"
-        return ""
-
-    def estado_texto(minimo, maximo, obtenido):
-        if pd.isna(obtenido): return ""
-        if maximo and obtenido > maximo:
-            return "Exceso"
-        if minimo and obtenido < minimo:
-            return "Deficiente"
-        if minimo or maximo:
-            return "Cumple"
-        return "Sin restricción"
+    req_auto = st.session_state.get("nutrientes_requeridos", {})
+    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
     if diet:
+        # Apartado 1: Composición óptima de la dieta
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
-        # === NUEVO: Tabla de cumplimiento de inclusión mínima ===
+        # Apartado 2: Cumplimiento de mínimo de inclusión para ingredientes seleccionados
         if min_inclusion_status:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
 
+        # Apartado 3: Costos
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
         st.metric(label="Precio por kg de dieta", value=f"${precio_kg:,.2f}")
         st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:,.2f}")
 
-        st.subheader("Composición nutricional de la dieta")
+        # Apartado 4: Composición nutricional y cumplimiento
+        st.subheader("Composición nutricional y cumplimiento")
+        
+        # Ajusta los requerimientos del tipo de dieta
+        if tipo_dieta == "Alta en proteína":
+            req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
+        elif tipo_dieta == "Equilibrada":
+            req_auto["Proteína"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+        elif tipo_dieta == "Alta en carbohidratos":
+            req_auto["Proteína"] = {"min": 2.0, "max": 4.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
 
         comp_list = []
-        for nut in nutrientes_seleccionados:
-            valores = req_input.get(nut, {})
-            min_r = valores.get("min", "")
-            max_r = valores.get("max", "")
+        for nut, req in req_auto.items():
+            min_r = req.get("min", "")
+            max_r = req.get("max", "")
             obtenido = nutritional_values.get(nut, None)
+            cumple = "✔️"
+            # Comparación robusta de mínimos
+            try:
+                min_r_f = float(min_r)
+                obtenido_f = float(obtenido)
+                if obtenido_f < min_r_f:
+                    cumple = "❌"
+            except (ValueError, TypeError):
+                cumple = "❌"
+            # Comparación robusta de máximos
+            try:
+                max_r_f = float(max_r)
+                obtenido_f = float(obtenido)
+                if max_r_f != 0 and obtenido_f > max_r_f:
+                    cumple = "❌"
+            except (ValueError, TypeError):
+                pass
             comp_list.append({
                 "Nutriente": nut,
-                "Mínimo": min_r if min_r else "",
-                "Máximo": max_r if max_r else "",
+                "Mínimo": min_r,
+                "Máximo": max_r,
                 "Obtenido": round(obtenido, 4) if obtenido is not None and obtenido != "" else "",
-                "Estado": estado_texto(min_r, max_r, obtenido),
-                "": emoji_estado(min_r, max_r, obtenido)
+                "Cumple": cumple
             })
-
         comp_df = pd.DataFrame(comp_list)
         st.dataframe(comp_df, use_container_width=True)
-
-        # === APARTADO DE CUMPLIMIENTO DE RATIOS ENTRE NUTRIENTES ===
-        if ratios:
-            st.subheader("Cumplimiento de restricciones de ratios entre nutrientes")
-            ratio_rows = []
-            for i, ratio in enumerate(ratios):
-                num = ratio.get("numerador")
-                den = ratio.get("denominador")
-                op = ratio.get("operador")
-                val = ratio.get("valor")
-
-                num_val = nutritional_values.get(num, None)
-                den_val = nutritional_values.get(den, None)
-                calculado = None
-                cumple = ""
-                detalle = ""
-                if den_val is not None and den_val != 0:
-                    calculado = num_val / den_val
-                    calc_str = f"{num_val:.4f} / {den_val:.4f} = {calculado:.4f}"
-                    # Evaluación del cumplimiento
-                    if op == "=":
-                        cumple = abs(calculado - val) < 1e-4
-                    elif op == ">=":
-                        cumple = calculado >= val - 1e-4
-                    elif op == "<=":
-                        cumple = calculado <= val + 1e-4
-                    elif op == ">":
-                        cumple = calculado > val
-                    elif op == "<":
-                        cumple = calculado < val
-                    detalle = f"Calculado: {calc_str}"
-                else:
-                    cumple = False
-                    detalle = f"División por cero (denominador '{den}' = {den_val})"
-
-                cumple_txt = (
-                    "✅ Cumple" if cumple else "❌ No cumple"
-                )
-
-                ratio_rows.append({
-                    "Ratio definido": f"{num} / {den} {op} {val}",
-                    "Valor calculado": f"{calculado:.4f}" if calculado is not None else "N/A",
-                    "Cumplimiento": cumple_txt,
-                    "Detalle": detalle
-                })
-
-            ratio_df = pd.DataFrame(ratio_rows)
-            st.dataframe(ratio_df, use_container_width=True)
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
         
