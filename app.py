@@ -317,14 +317,29 @@ with tabs[1]:
 
 with tabs[2]:
     st.header("Resultados de la formulación automática")
-    diet = st.session_state.get("last_diet", None)
-    total_cost = st.session_state.get("last_cost", 0)
-    nutritional_values = st.session_state.get("last_nutritional_values", {})
-    min_inclusion_status = st.session_state.get("min_inclusion_status", [])
-    req_auto = st.session_state.get("nutrientes_requeridos", {})
-    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+    result = st.session_state.get("last_result", None)
+    if result and result.get("fallback", False):
+        st.error("No se pudo formular una dieta que cumpla los requerimientos nutricionales con los ingredientes seleccionados. Revisa la selección o los mínimos requeridos.")
+        st.markdown("La dieta mostrada a continuación es solo una solución de emergencia, no cumple requisitos nutricionales.")
+        diet = result.get("diet", {})
+        if diet:
+            res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+            st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+        min_inclusion_status = result.get("min_inclusion_status", [])
+        if min_inclusion_status:
+            df_min_cumpl = pd.DataFrame(min_inclusion_status)
+            st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
+        comp_df = pd.DataFrame(result.get("compliance_data", []))
+        if not comp_df.empty:
+            st.dataframe(comp_df, use_container_width=True)
+    elif result and result.get("success", False):
+        diet = result["diet"]
+        total_cost = result["cost"]
+        nutritional_values = result["nutritional_values"]
+        min_inclusion_status = result.get("min_inclusion_status", [])
+        req_auto = st.session_state.get("nutrientes_requeridos", {})
+        tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
-    if diet:
         # --- Apartado 1: Composición óptima de la dieta ---
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
@@ -345,7 +360,6 @@ with tabs[2]:
 
         # --- Apartado 4: Composición nutricional y cumplimiento ---
         st.subheader("Composición nutricional y cumplimiento")
-        # Ajusta los requerimientos automáticos según tipo de dieta
         if tipo_dieta == "Alta en proteína":
             req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
             req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
@@ -362,7 +376,6 @@ with tabs[2]:
             max_r = req.get("max", "")
             obtenido = nutritional_values.get(nut, None)
             cumple = "✔️"
-            # Comparación robusta de mínimos
             try:
                 min_r_f = float(min_r)
                 obtenido_f = float(obtenido)
@@ -370,7 +383,6 @@ with tabs[2]:
                     cumple = "❌"
             except (ValueError, TypeError):
                 cumple = "❌"
-            # Comparación robusta de máximos
             try:
                 max_r_f = float(max_r)
                 obtenido_f = float(obtenido)
