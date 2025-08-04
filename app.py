@@ -359,12 +359,10 @@ with tabs[2]:
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
     
-# ======================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA ========================
+# ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 
 with tabs[2]:
     st.header("Resultados de la formulación automática")
-    
-    # Recupera los datos de la última formulación
     diet = st.session_state.get("last_diet", None)
     total_cost = st.session_state.get("last_cost", 0)
     nutritional_values = st.session_state.get("last_nutritional_values", {})
@@ -373,28 +371,27 @@ with tabs[2]:
     tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
     if diet:
-        # Apartado 1: Composición óptima de la dieta
+        # --- Apartado 1: Composición óptima de la dieta ---
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
-        # Apartado 2: Cumplimiento de mínimo de inclusión para ingredientes seleccionados
+        # --- Apartado 2: Cumplimiento de mínimo de inclusión para ingredientes seleccionados ---
         if min_inclusion_status:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
 
-        # Apartado 3: Costos
+        # --- Apartado 3: Costos ---
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
         st.metric(label="Precio por kg de dieta", value=f"${precio_kg:,.2f}")
         st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:,.2f}")
 
-        # Apartado 4: Composición nutricional y cumplimiento
+        # --- Apartado 4: Composición nutricional y cumplimiento ---
         st.subheader("Composición nutricional y cumplimiento")
-        
-        # Ajusta los requerimientos del tipo de dieta
+        # Ajusta los requerimientos automáticos según tipo de dieta
         if tipo_dieta == "Alta en proteína":
             req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
             req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
