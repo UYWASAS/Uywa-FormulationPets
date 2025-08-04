@@ -26,7 +26,7 @@ class DietFormulator:
         self.diet_type = diet_type
         self.min_num_ingredientes = min_num_ingredientes
 
-        # Restricciones obligatorias según perfil de dieta
+        # Restricciones obligatorias según perfil de dieta (nutrientes)
         if self.diet_type:
             if self.diet_type == "Alta en proteína":
                 self.requirements["Proteína"] = {"min": 6.0, "max": 9.0}
@@ -37,6 +37,17 @@ class DietFormulator:
             elif self.diet_type == "Alta en carbohidratos":
                 self.requirements["Proteína"] = {"min": 2.0, "max": 4.0}
                 self.requirements["Carbohidrato"] = {"min": 6.0, "max": 9.0}
+
+        # Categorización de ingredientes
+        self.categorias_principales = ["Proteinas", "Carbohidratos", "Grasas", "Vegetales", "Frutas", "Otros"]
+        self.categorias_indices = {cat: [] for cat in self.categorias_principales}
+        if "Categoría" in self.ingredients_df.columns:
+            for i in self.ingredients_df.index:
+                cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
+                for cat in self.categorias_principales:
+                    # Comparación robusta
+                    if cat_val == cat:
+                        self.categorias_indices[cat].append(i)
 
     def run(self):
         prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
@@ -83,6 +94,28 @@ class DietFormulator:
             prob += ingredient_vars[i] >= 0.01 * present[i]
             prob += ingredient_vars[i] <= big_M * present[i]
         prob += pulp.lpSum([present[i] for i in self.ingredients_df.index]) >= self.min_num_ingredientes
+
+        # --------- Restricciones de proporción por categoría ---------
+        # Obtiene los índices de cada categoría seleccionada
+        prote_indices = self.categorias_indices.get("Proteinas", [])
+        carb_indices = self.categorias_indices.get("Carbohidratos", [])
+
+        # Perfil de dieta: proporciones mínimas por categoría
+        if self.diet_type == "Alta en proteína":
+            if prote_indices:  # Solo si hay ingredientes proteicos seleccionados
+                prob += pulp.lpSum([ingredient_vars[i] for i in prote_indices]) >= 0.80, "Min_Proteinas"
+        elif self.diet_type == "Equilibrada":
+            if prote_indices:
+                prob += pulp.lpSum([ingredient_vars[i] for i in prote_indices]) >= 0.50, "Min_Proteinas"
+            if carb_indices:
+                prob += pulp.lpSum([ingredient_vars[i] for i in carb_indices]) >= 0.30, "Min_Carbohidratos"
+        elif self.diet_type == "Alta en carbohidratos":
+            if prote_indices:
+                prob += pulp.lpSum([ingredient_vars[i] for i in prote_indices]) >= 0.25, "Min_Proteinas"
+            if carb_indices:
+                prob += pulp.lpSum([ingredient_vars[i] for i in carb_indices]) >= 0.50, "Min_Carbohidratos"
+
+        # -------------------------------------------------------------------
 
         # Función objetivo: penalización fuerte incumplimiento + precio ponderado
         prob += (
@@ -152,7 +185,7 @@ class DietFormulator:
                 try:
                     req_max_f = float(req_max)
                     obtenido_f = float(obtenido)
-                    if req_max_f != 0 and obtenido_f > req_max_f:
+                    if req_max_f != 0 and obtenido_f > max_r_f:
                         estado = "❌"
                 except (ValueError, TypeError):
                     pass
