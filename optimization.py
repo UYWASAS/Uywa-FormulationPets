@@ -12,7 +12,8 @@ class DietFormulator:
         selected_stage=None,
         ratios=None,
         min_selected_ingredients=None,
-        diet_type=None
+        diet_type=None,
+        min_num_ingredientes=3,  # Número mínimo de ingredientes en mezcla
     ):
         self.nutrient_list = nutrient_list
         self.requirements = requirements
@@ -23,8 +24,9 @@ class DietFormulator:
         self.ratios = ratios or []
         self.min_selected_ingredients = min_selected_ingredients or {}
         self.diet_type = diet_type
+        self.min_num_ingredientes = min_num_ingredientes
 
-        # Ajuste de requerimientos según tipo de dieta
+        # Restricciones según perfil de dieta
         if self.diet_type:
             if self.diet_type == "Alta en proteína":
                 self.requirements["Proteína"] = {"min": 6.0, "max": 9.0}
@@ -49,24 +51,44 @@ class DietFormulator:
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
+            min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
+            prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-        # --- Variables de slack para penalizar incumplimiento de nutrientes ---
-        slacks = {}
+        # --- Penalización por incumplimiento nutricional (slacks) ---
+        slacks_min = {}
+        slacks_max = {}
         for nutrient in self.nutrient_list:
-            slacks[nutrient] = pulp.LpVariable(f"slack_{nutrient}", lowBound=0, cat="Continuous")
+            slacks_min[nutrient] = pulp.LpVariable(f"slack_min_{nutrient}", lowBound=0, cat="Continuous")
+            slacks_max[nutrient] = pulp.LpVariable(f"slack_max_{nutrient}", lowBound=0, cat="Continuous")
 
-        # --- Restricciones de nutrientes con penalización ---
+        # --- Restricciones nutricionales obligatorias (según perfil de dieta) ---
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", None)
-            if nutrient in self.ingredients_df.columns and req_min is not None and str(req_min) != "" and float(req_min) > 0:
-                prob += pulp.lpSum([self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]) + slacks[nutrient] >= float(req_min), f"Min_{nutrient}"
+            req_max = req.get("max", None)
+            if nutrient in self.ingredients_df.columns:
+                nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index])
+                # Restricción mínima penalizada
+                if req_min is not None and str(req_min) != "":
+                    prob += nut_sum + slacks_min[nutrient] >= float(req_min), f"Min_{nutrient}"
+                # Restricción máxima penalizada
+                if req_max is not None and str(req_max) != "" and float(req_max) > 0:
+                    prob += nut_sum - slacks_max[nutrient] <= float(req_max), f"Max_{nutrient}"
 
-        # --- Función objetivo: minimizar suma de slacks (incumplimiento) + precio ponderado ---
+        # --- Mínimo de ingredientes presentes (variedad) ---
+        present = {i: pulp.LpVariable(f"present_{i}", cat="Binary") for i in self.ingredients_df.index}
+        big_M = 1.0
+        for i in self.ingredients_df.index:
+            prob += ingredient_vars[i] >= 0.01 * present[i]
+            prob += ingredient_vars[i] <= big_M * present[i]
+        prob += pulp.lpSum([present[i] for i in self.ingredients_df.index]) >= self.min_num_ingredientes
+
+        # --- Función objetivo: penalización fuerte incumplimiento + precio ponderado ---
         prob += (
-            pulp.lpSum([slacks[nut] for nut in self.nutrient_list])
-            + 0.01 * pulp.lpSum([float(self.ingredients_df.loc[i, "precio"]) * ingredient_vars[i] for i in self.ingredients_df.index])
+            100 * pulp.lpSum([slacks_min[nut] for nut in self.nutrient_list]) +
+            100 * pulp.lpSum([slacks_max[nut] for nut in self.nutrient_list]) +
+            0.001 * pulp.lpSum([float(self.ingredients_df.loc[i, "precio"]) * ingredient_vars[i] for i in self.ingredients_df.index])
         ), "PenalizedObjective"
 
         prob.solve()
