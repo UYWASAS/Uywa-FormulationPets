@@ -11,8 +11,8 @@ class DietFormulator:
         selected_species=None,
         selected_stage=None,
         ratios=None,
-        min_selected_ingredients=None,  # <--- NUEVO
-        diet_type=None                  # <--- NUEVO
+        min_selected_ingredients=None,
+        diet_type=None
     ):
         """
         ingredients_df: DataFrame con columnas de nutrientes, precio e 'Ingrediente'
@@ -34,8 +34,9 @@ class DietFormulator:
         self.min_selected_ingredients = min_selected_ingredients or {}
         self.diet_type = diet_type
 
-        # === Ajuste de requerimientos según tipo de dieta ===
+        # Ajuste de requerimientos según tipo de dieta
         if self.diet_type:
+            # Puedes ajustar los valores de referencia aquí según tus necesidades
             if self.diet_type == "Alta en proteína":
                 self.requirements["Proteína"] = {"min": 6.0, "max": 9.0}
                 self.requirements["Carbohidrato"] = {"min": 2.0, "max": 5.0}
@@ -59,12 +60,12 @@ class DietFormulator:
         # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Límites de inclusión por ingrediente (solo máximos como duros, los mínimos automáticos solo se chequean en resultados)
+        # Limites de inclusión por ingrediente (solo máximos como duros, los mínimos automáticos solo se chequean en resultados)
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
-            # Si quieres poner mínimos duros, pon aquí. Si no quieres bloquear la dieta nunca, no los pongas.
+            # No bloquea por mínimos automáticos para máxima flexibilidad
 
         # Restricciones nutricionales según requirements (solo si min o max distinto de 0)
         for nutrient in self.nutrient_list:
@@ -93,7 +94,7 @@ class DietFormulator:
                     if nutrient in self.ingredients_df.columns
                 ]) <= max_val, f"Max_{nutrient}"
 
-        # === RESTRICCIONES DE RATIOS ENTRE NUTRIENTES ===
+        # Restricciones de ratios (no usado en la versión simple, pero soportado)
         for idx, ratio in enumerate(self.ratios):
             num = ratio.get("numerador")
             den = ratio.get("denominador")
@@ -113,7 +114,6 @@ class DietFormulator:
                 for i in self.ingredients_df.index
             ])
 
-            # Ratio linealizado: num - val*den {op} 0
             lhs = expr_num - float(val) * expr_den
             cname = f"Ratio_{num}_{op}_{val}_{den}_{idx}"
             if op == ">=":
