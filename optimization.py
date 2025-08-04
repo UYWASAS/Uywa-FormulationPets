@@ -185,7 +185,7 @@ class DietFormulator:
                 try:
                     req_max_f = float(req_max)
                     obtenido_f = float(obtenido)
-                    if req_max_f != 0 and obtenido_f > max_r_f:
+                    if req_max_f != 0 and obtenido_f > req_max_f:  # <- FIXED HERE!
                         estado = "❌"
                 except (ValueError, TypeError):
                     pass
