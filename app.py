@@ -202,7 +202,7 @@ with tabs[0]:
         for _, row in df_nutr.iterrows()
     }
     
-# =========== BLOQUE DE FORMULACIÓN (with tabs[1]: Formulación) ===========
+# ======================== BLOQUE DE FORMULACIÓN (with tabs[1]: Formulación) ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
 
@@ -298,7 +298,6 @@ with tabs[1]:
         else:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
-# ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 # =========== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ===========
 with tabs[2]:
     st.header("Resultados de la formulación automática")
