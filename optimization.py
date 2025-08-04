@@ -14,6 +14,8 @@ class DietFormulator:
         min_selected_ingredients=None,
         diet_type=None,
         min_num_ingredientes=3,
+        min_inclusion_pct=0.01,  # mínimo 1%
+        max_inclusion_pct=0.05,  # máximo 5%
     ):
         self.nutrient_list = nutrient_list
         self.requirements = requirements
@@ -25,6 +27,8 @@ class DietFormulator:
         self.min_selected_ingredients = min_selected_ingredients or {}
         self.diet_type = diet_type
         self.min_num_ingredientes = min_num_ingredientes
+        self.min_inclusion_pct = min_inclusion_pct
+        self.max_inclusion_pct = max_inclusion_pct
 
         # Restricciones obligatorias según perfil de dieta (nutrientes)
         if self.diet_type:
@@ -61,10 +65,15 @@ class DietFormulator:
         # Límites de inclusión máximos y mínimos (si los hay)
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
-            max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
-            min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
-            prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
-            prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
+            # Si el ingrediente fue seleccionado explícitamente, fuerza inclusión entre 1% y 5%
+            if ing_name in self.min_selected_ingredients:
+                prob += ingredient_vars[i] >= self.min_inclusion_pct, f"Min1Pct_{ing_name}"
+                prob += ingredient_vars[i] <= self.max_inclusion_pct, f"Max5Pct_{ing_name}"
+            else:
+                max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
+                min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
+                prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
+                prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
         # Penalización por incumplimiento nutricional (slacks)
         slacks_min = {}
@@ -185,7 +194,7 @@ class DietFormulator:
                 try:
                     req_max_f = float(req_max)
                     obtenido_f = float(obtenido)
-                    if req_max_f != 0 and obtenido_f > req_max_f:  # <- FIXED HERE!
+                    if req_max_f != 0 and obtenido_f > req_max_f:
                         estado = "❌"
                 except (ValueError, TypeError):
                     pass
@@ -205,7 +214,7 @@ class DietFormulator:
                 "min_inclusion_status": min_inclusion_status
             }
         else:
-            # SIEMPRE devolver una solución, aunque sea solo el ingrediente más barato
+            # SIEMPRE devolver una solución fallback, aunque sea solo el ingrediente más barato
             idx_min = self.ingredients_df["precio"].idxmin()
             ingredient_name = self.ingredients_df.loc[idx_min, "Ingrediente"]
             diet = {ingredient_name: 100.0}
@@ -220,14 +229,7 @@ class DietFormulator:
                 req_min = req.get("min", "")
                 req_max = req.get("max", "")
                 obtenido = nutritional_values.get(nutrient, None)
-                estado = "❌"
-                try:
-                    req_min_f = float(req_min)
-                    obtenido_f = float(obtenido)
-                    if obtenido_f >= req_min_f and (not req_max or float(req_max) == 0 or obtenido_f <= float(req_max)):
-                        estado = "✔️"
-                except (ValueError, TypeError):
-                    estado = "❌"
+                estado = "X"  # No se pudo cumplir, marca como "X"
                 compliance_data.append({
                     "Nutriente": nutrient,
                     "Mínimo": req_min,
@@ -239,7 +241,7 @@ class DietFormulator:
                 "Ingrediente": ingredient_name,
                 "Incluido (%)": 100.0,
                 "Minimo requerido (%)": self.min_selected_ingredients.get(ingredient_name, 0.01),
-                "Cumple mínimo": "✔️"
+                "Cumple mínimo": "X"
             }]
             return {
                 "success": True,
