@@ -11,8 +11,6 @@ from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 from utils import fmt2
 
-valor_redondeado = fmt2(valor_original)
-
 # ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL SIN FOTO/NOMBRE MASCOTA ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
 st.markdown("""
