@@ -307,6 +307,14 @@ with tabs[2]:
     elif result.get("fallback", False):
         st.error("No se pudo formular una dieta que cumpla los requerimientos nutricionales con los ingredientes seleccionados. Revisa la selección o los mínimos requeridos.")
         st.markdown("La dieta mostrada a continuación es solo una solución de emergencia, no cumple requisitos nutricionales.")
+
+        # Mostrar lista de nutrientes que no cumplen
+        comp_df = pd.DataFrame(result.get("compliance_data", []))
+        if not comp_df.empty:
+            no_cumplen = comp_df[comp_df["Cumple"] != "✔️"]["Nutriente"].tolist()
+            if no_cumplen:
+                st.info("Nutrientes fuera de rango: " + ", ".join(str(n) for n in no_cumplen))
+
         diet = result.get("diet", {})
         if diet:
             res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
@@ -315,7 +323,6 @@ with tabs[2]:
         if min_inclusion_status:
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
-        comp_df = pd.DataFrame(result.get("compliance_data", []))
         if not comp_df.empty:
             st.dataframe(comp_df, use_container_width=True)
     elif result.get("success", False):
@@ -326,21 +333,25 @@ with tabs[2]:
         req_auto = st.session_state.get("nutrientes_requeridos", {})
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
+        # --- Apartado 1: Composición óptima de la dieta ---
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
+        # --- Apartado 2: Cumplimiento de mínimo de inclusión para ingredientes seleccionados ---
         if min_inclusion_status:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
 
+        # --- Apartado 3: Costos ---
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
         st.metric(label="Precio por kg de dieta", value=f"${precio_kg:,.2f}")
         st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:,.2f}")
 
+        # --- Apartado 4: Composición nutricional y cumplimiento ---
         st.subheader("Composición nutricional y cumplimiento")
         if tipo_dieta == "Alta en proteína":
             req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
@@ -381,6 +392,8 @@ with tabs[2]:
             })
         comp_df = pd.DataFrame(comp_list)
         st.dataframe(comp_df, use_container_width=True)
+    else:
+        st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
         
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
