@@ -189,7 +189,8 @@ class DietFormulator:
                 "cost": total_cost,
                 "nutritional_values": nutritional_values,
                 "compliance_data": compliance_data,
-                "min_inclusion_status": min_inclusion_status
+                "min_inclusion_status": min_inclusion_status,
+                "fallback": False,
             }
         else:
             idx_min = self.ingredients_df["precio"].idxmin()
@@ -221,12 +222,14 @@ class DietFormulator:
                 "Cumple mínimo": "X"
             }]
             return {
-                "success": True,
+                "success": False,
+                "fallback": True,
                 "diet": diet,
                 "cost": total_cost,
                 "nutritional_values": nutritional_values,
                 "compliance_data": compliance_data,
-                "min_inclusion_status": min_inclusion_status
+                "min_inclusion_status": min_inclusion_status,
+                "message": "No se pudo cumplir los requerimientos con los ingredientes seleccionados."
             }
 
     def solve(self):
