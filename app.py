@@ -264,27 +264,34 @@ with tabs[1]:
         if formulable:
             if st.button("Formular dieta automática"):
                 req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
+                # NO colocar max en proteína
                 if tipo_dieta == "Alta en proteína":
-                    req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+                    req_auto["Proteína"] = {"min": 6.0, "unit": "g/100g"}
                     req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
                 elif tipo_dieta == "Equilibrada":
-                    req_auto["Proteína"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+                    req_auto["Proteína"] = {"min": 4.0, "unit": "g/100g"}
                     req_auto["Carbohidrato"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
                 elif tipo_dieta == "Alta en carbohidratos":
-                    req_auto["Proteína"] = {"min": 2.0, "max": 4.0, "unit": "g/100g"}
+                    req_auto["Proteína"] = {"min": 2.0, "unit": "g/100g"}
                     req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
 
                 nutrientes_seleccionados = list(req_auto.keys())
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
 
+                # Si deseas limitar la suma de ingredientes proteicos
+                max_proteinas_pct = st.slider("Máximo porcentaje de materias primas proteicas en la mezcla", 0.0, 1.0, 1.0)
+                proteinas_indices = ingredientes_df_filtrado[ingredientes_df_filtrado["Categoría"].str.strip().str.capitalize() == "Proteinas"].index.tolist()
+
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
-                    {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", 0)} for nut in nutrientes_seleccionados},
+                    {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", None)} for nut in nutrientes_seleccionados},
                     limits={"min": {}, "max": {}},
                     ratios=[],
                     min_selected_ingredients=min_selected_ingredients,
-                    diet_type=tipo_dieta
+                    diet_type=tipo_dieta,
+                    max_proteinas_pct=max_proteinas_pct,
+                    proteinas_indices=proteinas_indices
                 )
                 result = formulator.solve()
                 st.session_state["last_result"] = result
