@@ -161,37 +161,39 @@ with tabs[0]:
         unidad = info["unit"]
         # EM ajusta mostrando valor calculado y nombre correcto
         if nutr == "EM" and unidad == "kcal/kg":
+            min_aj = energia
+            max_aj = info.get("max", None)
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": energia,
-                "Max": None,
+                "Min": fmt2(min_aj),
+                "Max": fmt2(max_aj) if max_aj is not None else "",
                 "Unidad": unidad
             })
         # EM_1 también debe ajustarse proporcionalmente
         elif nutr == "EM_1" and unidad == "kcal/g":
-            min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
-            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
+            min_aj = ajustar_nutriente(info.get("min"), energia_ref, energia) if info.get("min") is not None else None
+            max_aj = ajustar_nutriente(info.get("max"), energia_ref, energia) if info.get("max") is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": min_aj,
-                "Max": max_aj,
+                "Min": fmt2(min_aj) if min_aj is not None else "",
+                "Max": fmt2(max_aj) if max_aj is not None else "",
                 "Unidad": unidad
             })
         # Ajusta g/100g o g/kg proporcionalmente
         elif unidad in ["g/100g", "g/kg"]:
-            min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
-            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
+            min_aj = ajustar_nutriente(info.get("min"), energia_ref, energia) if info.get("min") is not None else None
+            max_aj = ajustar_nutriente(info.get("max"), energia_ref, energia) if info.get("max") is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": min_aj,
-                "Max": max_aj,
+                "Min": fmt2(min_aj) if min_aj is not None else "",
+                "Max": fmt2(max_aj) if max_aj is not None else "",
                 "Unidad": unidad
             })
         else:
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": info["min"],
-                "Max": info["max"],
+                "Min": fmt2(info.get("min")) if info.get("min") is not None else "",
+                "Max": fmt2(info.get("max")) if info.get("max") is not None else "",
                 "Unidad": unidad
             })
 
