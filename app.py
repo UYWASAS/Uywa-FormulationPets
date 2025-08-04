@@ -201,240 +201,84 @@ with tabs[0]:
         for _, row in df_nutr.iterrows()
     }
     
-# ======================== BLOQUE 6: TAB FORMULACIÓN CON SELECCIÓN AUTOMÁTICA DE MÍNIMOS ========================
+# ======================== BLOQUE 6: FORMULACIÓN AUTOMÁTICA, SOLO SELECCIÓN MATERIAS Y TIPO DE DIETA ========================
+
 with tabs[1]:
-    st.header("Formulación de Dieta")
+    st.header("Formulación automática de dieta")
     mascota = st.session_state.get("profile", {}).get("mascota", {})
     nombre_mascota = mascota.get("nombre", "Mascota")
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # ---- 6.0 Selección de tipo de dieta ----
-    st.subheader("Tipo de dieta objetivo")
+    # 1. Selección de tipo de dieta
     tipo_dieta = st.selectbox(
-        "Selecciona el tipo de dieta objetivo",
+        "Tipo de dieta objetivo",
         ["Alta en proteína", "Equilibrada", "Alta en carbohidratos"],
-        index=1,  # Equilibrada por defecto
+        index=1,
         key="tipo_dieta_sel"
     )
 
-    # ---- 6.1 Carga de ingredientes ----
+    # 2. Carga de ingredientes
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
     ingredientes_df = load_ingredients(ingredientes_file)
-    
+
     if ingredientes_df is not None and not ingredientes_df.empty:
+        # Limpia y convierte a numérico todas las columnas excepto Ingrediente
         ingredientes_df = ingredientes_df.replace('.', 0)
-        nutr_cols = [
-            'EMA_POLLIT', 'EMA_AVES', 'PB', 'EE', 'FB', 'Materia seca (%)', 'LYS_DR', 'MET_DR', 'M+C_DR',
-            'THR_DR', 'TRP_DR', 'ILE_DR', 'VAL_DR', 'ARG_DR', 'Ca', 'P', 'Pdisp.AVES',
-            'Na', 'K', 'Zn', 'Cu', 'Mn', 'Fe', 'S', 'Vit. E', 'Colina', 'Biotina', 'precio'
-        ]
-        for col in nutr_cols:
-            if col in ingredientes_df.columns:
+        for col in ingredientes_df.columns:
+            if col != "Ingrediente":
                 ingredientes_df[col] = pd.to_numeric(ingredientes_df[col], errors='coerce').fillna(0)
 
-    ingredientes_sel = []
-    ingredientes_df_filtrado = pd.DataFrame()
-    min_selected_ingredients = {}
-    min_limits = {}
-    max_limits = {}
-
-    if ingredientes_df is not None and not ingredientes_df.empty:
-        st.subheader("Selecciona ingredientes para formular")
+        st.subheader("Selecciona las materias primas para formular la dieta")
         ingredientes_disp = ingredientes_df["Ingrediente"].tolist()
         ingredientes_sel = st.multiselect(
-            "Buscar y selecciona ingredientes",
+            "Ingredientes para la dieta",
             ingredientes_disp,
             default=[],
-            help="Elige solo los ingredientes que deseas usar en la dieta.",
+            help="Elige los ingredientes que deseas usar en la mezcla.",
             key="ingredientes_sel"
         )
-
         ingredientes_sel = list(dict.fromkeys(ingredientes_sel))
-        clean_state(["min_", "max_"], ingredientes_sel)
 
-        # --- NUEVO: Asignar mínimo automático a cada ingrediente seleccionado ---
-        # Por ejemplo, 0.01% (puedes ajustar a lo que consideres adecuado)
-        min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
-
-        st.subheader("¿Deseas limitar inclusión máxima de algún ingrediente?")
-        ingredientes_a_limitar = st.multiselect(
-            "Solo estos ingredientes tendrán límites máximos:",
-            ingredientes_sel,
-            default=[],
-            help="El resto se formulará libremente.",
-            key="ingredientes_a_limitar"
-        )
-        ingredientes_a_limitar = list(dict.fromkeys(ingredientes_a_limitar))
-        clean_state(["max_"], ingredientes_a_limitar)
-
-        # Limites máximos
-        if ingredientes_a_limitar:
-            with st.expander("Límites máximos de inclusión por ingrediente (%)", expanded=True):
-                for ing in ingredientes_a_limitar:
-                    max_val = st.number_input(
-                        f"Máximo de inclusión para {ing} (%)",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=100.0,
-                        key=f"max_inclusion_{ing}",
-                        format="%.2f"
-                    )
-                    max_limits[ing] = max_val
-
-        # ---- 6.3 Edición de ingredientes seleccionados ----
+        # Filtra solo los seleccionados
         if ingredientes_sel:
-            with st.expander("Ver/editar composición de ingredientes seleccionados"):
-                df_edit = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
-                key_editor = "ingredientes_editor_" + "_".join([str(e).replace(" ", "_") for e in ingredientes_sel])
-                df_edit = st.data_editor(
-                    df_edit,
-                    num_rows="dynamic",
-                    use_container_width=True,
-                    key=key_editor
-                )
+            df_edit = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
             ingredientes_df_filtrado = df_edit.copy()
         else:
             ingredientes_df_filtrado = pd.DataFrame()
 
-        # ---- 6.4 Selección de nutrientes ----
-        nutrientes_posibles = get_nutrient_list(ingredientes_df) if not ingredientes_df.empty else []
-        nutrientes_seleccionados = st.multiselect(
-            "Nutrientes a considerar en la formulación",
-            nutrientes_posibles,
-            default=nutrientes_posibles[:8],
-            key="nutrientes_seleccionados"
-        )
-        nutrientes_seleccionados = list(dict.fromkeys(nutrientes_seleccionados))
-        clean_state(["min_", "max_"], nutrientes_seleccionados)
+        st.write(f"Ingredientes seleccionados: {', '.join(ingredientes_sel) if ingredientes_sel else 'Ninguno'}")
 
-        # ---- 6.5 BLOQUE DE INPUTS DE NUTRIENTES ----
-        st.write("Ingrese los valores mínimos y máximos permitidos para cada nutriente (máximo opcional):")
-        requeridos = st.session_state.get("nutrientes_requeridos", {})
-        nutrientes_data = {}
-        for nutriente in nutrientes_seleccionados:
-            cols = st.columns([2, 1, 1])
-            with cols[0]:
-                st.markdown(f"**{nutriente}**")
-            with cols[1]:
-                key_min = f"nutriente_min_{nutriente}"
-                valor_min = requeridos.get(nutriente, {}).get("min", 0.0) if requeridos else 0.0
-                valor_min_float = safe_float(valor_min, 0.0)
-                min_val = st.number_input(
-                    label="",
-                    min_value=0.0,
-                    max_value=1e9,
-                    value=valor_min_float,
-                    key=key_min,
-                    format="%.2f",
-                    help="Valor mínimo requerido"
-                )
-            with cols[2]:
-                key_max = f"nutriente_max_{nutriente}"
-                valor_max = requeridos.get(nutriente, {}).get("max", 0.0) if requeridos else 0.0
-                valor_max_float = safe_float(valor_max, 0.0)
-                max_placeholder = "Opcional: ingresa valor máximo si aplica"
-                max_val_raw = st.text_input(
-                    label="",
-                    value=str(valor_max_float) if valor_max_float else "",
-                    key=key_max,
-                    help=max_placeholder,
-                    placeholder=max_placeholder
-                )
-                max_val = safe_float(max_val_raw, 0.0)
-            nutrientes_data[nutriente] = {"min": min_val, "max": max_val}
-            st.session_state[f"min_{nutriente}"] = min_val
-            st.session_state[f"max_{nutriente}"] = max_val
-
-        req_input = nutrientes_data
-        st.session_state["req_input"] = req_input
-
-        # ---- 6.6 SUBAPARTADO DE RATIOS ENTRE NUTRIENTES ----
-        st.subheader("Restricciones adicionales: Ratios entre nutrientes")
-        if "ratios" not in st.session_state:
-            st.session_state["ratios"] = []
-
-        operadores = {
-            "=": "Igual a",
-            "<=": "Menor o igual que",
-            ">=": "Mayor o igual que",
-            "<": "Menor que",
-            ">": "Mayor que"
-        }
-
-        with st.expander("Agregar restricción de ratio entre nutrientes", expanded=False):
-            cols_ratio = st.columns([2, 2, 1, 2, 1])
-            with cols_ratio[0]:
-                nutr_a = st.selectbox("Nutriente numerador", nutrientes_seleccionados, key="ratio_nutr_a")
-            with cols_ratio[1]:
-                nutr_b = st.selectbox("Nutriente denominador", nutrientes_seleccionados, key="ratio_nutr_b")
-            with cols_ratio[2]:
-                operador = st.selectbox("Operador", list(operadores.keys()), format_func=lambda x: operadores[x], key="ratio_operador")
-            with cols_ratio[3]:
-                valor = st.number_input("Valor del ratio", min_value=0.0, max_value=1000.0, value=1.0, step=0.01, key="ratio_valor")
-            with cols_ratio[4]:
-                agregar = st.button("Agregar ratio", key="btn_agregar_ratio")
-
-            if agregar:
-                if nutr_a != nutr_b:
-                    nueva_restriccion = {
-                        "numerador": nutr_a,
-                        "denominador": nutr_b,
-                        "operador": operador,
-                        "valor": valor
-                    }
-                    st.session_state["ratios"].append(nueva_restriccion)
-                else:
-                    st.warning("El numerador y denominador deben ser diferentes.")
-
-        # Mostrar ratios agregados con opción de borrado individual
-        if st.session_state["ratios"]:
-            st.markdown("**Ratios de nutrientes definidos:**")
-            ratios_a_borrar = []
-            for i, ratio in enumerate(st.session_state["ratios"]):
-                cols_ratio_disp = st.columns([5, 1])
-                with cols_ratio_disp[0]:
-                    st.write(
-                        f"{ratio['numerador']} / {ratio['denominador']} {ratio['operador']} {ratio['valor']}",
-                        key=f"ratio_{i}_display"
-                    )
-                with cols_ratio_disp[1]:
-                    if st.button("🗑️ Eliminar", key=f"eliminar_ratio_{i}"):
-                        ratios_a_borrar.append(i)
-            if ratios_a_borrar:
-                for idx in sorted(ratios_a_borrar, reverse=True):
-                    st.session_state["ratios"].pop(idx)
-
-        # ---- 6.7 Guardado seguro para diagnóstico en resultados ----
-        if not ingredientes_df_filtrado.empty:
-            st.session_state["ingredients_df"] = ingredientes_df_filtrado.copy()
-        elif not ingredientes_df.empty:
-            st.session_state["ingredients_df"] = ingredientes_df.copy()
-
-        # ---- 6.8 Formulable y botón ----
-        formulable = not ingredientes_df_filtrado.empty and nutrientes_seleccionados
-
-        def is_zero(val):
-            try:
-                f = float(val)
-                return abs(f) < 1e-8
-            except Exception:
-                return True
-
-        if formulable and all(is_zero(v.get("min", 0)) and is_zero(v.get("max", 0)) for v in req_input.values()):
-            st.warning("¡Advertencia! No hay restricciones nutricionales activas. La fórmula resultante puede ser solo el ingrediente más barato.")
+        # 3. Formulación automática (sin requerimientos manuales)
+        formulable = not ingredientes_df_filtrado.empty
 
         if formulable:
-            if st.button("Formular dieta óptima"):
+            if st.button("Formular dieta automática"):
+                # Requerimientos automáticos: perfil de mascota + tipo de dieta
+                req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
+                # Aplica ajuste según tipo de dieta
+                if tipo_dieta == "Alta en proteína":
+                    req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+                    req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
+                elif tipo_dieta == "Equilibrada":
+                    req_auto["Proteína"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+                    req_auto["Carbohidrato"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+                elif tipo_dieta == "Alta en carbohidratos":
+                    req_auto["Proteína"] = {"min": 2.0, "max": 4.0, "unit": "g/100g"}
+                    req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+
+                nutrientes_seleccionados = list(req_auto.keys())
+                # Mínimo automático para cada materia prima seleccionada
+                min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
+
+                # Formulación
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
-                    req_input,
-                    limits={"min": min_limits, "max": max_limits},  # solo aplica máximos como restricción dura
-                    selected_species=None,
-                    selected_stage=None,
-                    ratios=st.session_state.get("ratios", []),
-                    min_selected_ingredients=min_selected_ingredients,  # mínimo automático
+                    {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", 0)} for nut in nutrientes_seleccionados},
+                    limits={"min": {}, "max": {}},  # Sin máximos ni mínimos duros
+                    ratios=[],  # Sin ratios
+                    min_selected_ingredients=min_selected_ingredients,
                     diet_type=tipo_dieta
                 )
                 result = formulator.solve()
@@ -447,7 +291,73 @@ with tabs[1]:
                 else:
                     st.error("No se pudo formular la dieta: " + result.get("message", "Error desconocido"))
         else:
-            st.info("Carga los ingredientes, selecciona y edita, luego configura nutrientes para comenzar.")
+            st.info("Selecciona al menos un ingrediente para formular la mezcla.")
+
+# ===================== BLOQUE DE RESULTADOS (automático, muestra X en nutrientes no cumplidos) =====================
+with tabs[2]:
+    st.header("Resultados de la formulación automática")
+    diet = st.session_state.get("last_diet", None)
+    total_cost = st.session_state.get("last_cost", 0)
+    nutritional_values = st.session_state.get("last_nutritional_values", {})
+    min_inclusion_status = st.session_state.get("min_inclusion_status", [])
+    req_auto = st.session_state.get("nutrientes_requeridos", {})
+    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+
+    if diet:
+        st.subheader("Composición óptima de la dieta (%)")
+        res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+        st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+
+        # Cumplimiento de mínimos automáticos para ingredientes
+        if min_inclusion_status:
+            st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
+            df_min_cumpl = pd.DataFrame(min_inclusion_status)
+            st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
+
+        st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
+        precio_kg = total_cost / 100 if total_cost else 0
+        precio_ton = precio_kg * 1000
+        st.metric(label="Precio por kg de dieta", value=f"${precio_kg:,.2f}")
+        st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:,.2f}")
+
+        st.subheader("Composición nutricional y cumplimiento")
+        # Genera la tabla de nutrientes y cumplimiento
+        comp_list = []
+        # Usa los requerimientos automáticos ajustados
+        if tipo_dieta == "Alta en proteína":
+            req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
+        elif tipo_dieta == "Equilibrada":
+            req_auto["Proteína"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
+        elif tipo_dieta == "Alta en carbohidratos":
+            req_auto["Proteína"] = {"min": 2.0, "max": 4.0, "unit": "g/100g"}
+            req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
+
+        for nut, req in req_auto.items():
+            min_r = req.get("min", "")
+            max_r = req.get("max", "")
+            obtenido = nutritional_values.get(nut, None)
+            cumple = ""
+            if obtenido is None or obtenido == "":
+                cumple = "❌"
+            elif min_r and obtenido < min_r:
+                cumple = "❌"
+            elif max_r and obtenido > max_r:
+                cumple = "❌"
+            else:
+                cumple = "✔️"
+            comp_list.append({
+                "Nutriente": nut,
+                "Mínimo": min_r,
+                "Máximo": max_r,
+                "Obtenido": round(obtenido, 4) if obtenido is not None and obtenido != "" else "",
+                "Cumple": cumple
+            })
+        comp_df = pd.DataFrame(comp_list)
+        st.dataframe(comp_df, use_container_width=True)
+    else:
+        st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
     
 # ======================== BLOQUE 7: TAB RESULTADOS CON DIAGNÓSTICO Y CUMPLIMIENTO DE INCLUSIÓN MÍNIMA ========================
 with tabs[2]:
