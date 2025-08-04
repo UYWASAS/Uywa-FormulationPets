@@ -1,12 +1,6 @@
 import pulp
 import pandas as pd
-from utils import fmt2
-
-def fmt2(val):
-    try:
-        return round(float(val), 2)
-    except Exception:
-        return val
+from utils import fmt2  # SOLO el import, NO la definición de la función aquí
 
 class DietFormulator:
     def __init__(self, ingredients_df, nutrient_list, requirements, limits, ratios, min_selected_ingredients, diet_type):
