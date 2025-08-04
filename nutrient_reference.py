@@ -7,7 +7,7 @@ NUTRIENTES_REFERENCIA_PERRO = {
     "P":                {"min": 0.225, "max": None, "unit": "g/100g"},
     "Na":               {"min": 0.055, "max": 0.09, "unit": "g/100g"},
     "Cl":               {"min": 0.085, "max": None, "unit": "g/100g"},
-    "Lisina":           {"min": 0.22, "max": 0.7, "unit": "g/100g"},
+    "Lisina":           {"min": 0.22, "max": None, "unit": "g/100g"},
     "Metionina":        {"min": 0.088, "max": None, "unit": "g/100g"},
     "Metionina + Cistina": {"min": 0.175, "max": None, "unit": "g/100g"},
     "Valina":           {"min": 0.17, "max": None, "unit": "g/100g"},
