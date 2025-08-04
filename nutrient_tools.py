@@ -1,3 +1,5 @@
+from utils import fmt2
+
 def transformar_nutriente_a_porcentaje(valor, unidad):
     """
     Convierte un valor de nutriente a % (g/100g) según la unidad de entrada.
@@ -6,7 +8,7 @@ def transformar_nutriente_a_porcentaje(valor, unidad):
     try:
         val = float(valor)
     except Exception:
-        return valor  # No es numérico, retorna el valor original
+        return ""  # No es numérico, retorna vacío
 
     unidad = unidad.strip().lower()
     if unidad in ['%', 'g/100g']:
@@ -23,15 +25,15 @@ def transformar_nutriente_a_porcentaje(valor, unidad):
 def transformar_referencia_a_porcentaje(referencia_dict):
     """
     Aplica la transformación a todo el diccionario de referencia de nutrientes.
-    Retorna un nuevo diccionario con los valores en %.
+    Retorna un nuevo diccionario con los valores en % y dos decimales.
     """
     resultado = {}
     for nutriente, datos in referencia_dict.items():
-        min_percent = transformar_nutriente_a_porcentaje(datos['min'], datos['unit']) if datos['min'] is not None else None
-        max_percent = transformar_nutriente_a_porcentaje(datos['max'], datos['unit']) if datos['max'] is not None else None
+        min_percent = transformar_nutriente_a_porcentaje(datos['min'], datos['unit']) if datos.get('min') is not None else ""
+        max_percent = transformar_nutriente_a_porcentaje(datos['max'], datos['unit']) if datos.get('max') is not None else ""
         resultado[nutriente] = {
-            "min": min_percent,
-            "max": max_percent,
-            "unit": "%"
+            "min": fmt2(min_percent) if min_percent != "" else "",
+            "max": fmt2(max_percent) if max_percent != "" else "",
+            "unit": "%"  # O usa datos['unit'] si quieres mostrar la unidad original
         }
     return resultado
