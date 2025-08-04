@@ -1,5 +1,6 @@
 import pulp
 import pandas as pd
+from utils import fmt2
 
 def fmt2(val):
     try:
