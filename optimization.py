@@ -42,11 +42,9 @@ class DietFormulator:
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
 
-        # Objetivo: minimizar el coste total
-        prob += pulp.lpSum([
-            float(self.ingredients_df.loc[i, "precio"]) * ingredient_vars[i]
-            for i in self.ingredients_df.index
-        ]), "Total_Cost"
+        # Objetivo: NO depende del precio, simplemente dummy
+        prob += 0, "DummyObjective"
+
         # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
@@ -56,7 +54,7 @@ class DietFormulator:
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
-        # --- NUEVO: Restricciones de nutrientes ---
+        # --- Restricciones de nutrientes ---
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", None)
@@ -68,8 +66,6 @@ class DietFormulator:
                 # Restricción máxima
                 if req_max is not None and str(req_max) != "" and float(req_max) > 0:
                     prob += pulp.lpSum([self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]) <= float(req_max), f"Max_{nutrient}"
-
-        # No agregar ratios
 
         prob.solve()
         diet = {}
