@@ -56,7 +56,19 @@ class DietFormulator:
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
-        # No agregar restricciones nutricionales duras
+        # --- NUEVO: Restricciones de nutrientes ---
+        for nutrient in self.nutrient_list:
+            req = self.requirements.get(nutrient, {})
+            req_min = req.get("min", None)
+            req_max = req.get("max", None)
+            if nutrient in self.ingredients_df.columns:
+                # Restricción mínima
+                if req_min is not None and str(req_min) != "" and float(req_min) > 0:
+                    prob += pulp.lpSum([self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]) >= float(req_min), f"Min_{nutrient}"
+                # Restricción máxima
+                if req_max is not None and str(req_max) != "" and float(req_max) > 0:
+                    prob += pulp.lpSum([self.ingredients_df.loc[i, nutrient] * ingredient_vars[i] for i in self.ingredients_df.index]) <= float(req_max), f"Max_{nutrient}"
+
         # No agregar ratios
 
         prob.solve()
