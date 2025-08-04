@@ -47,7 +47,7 @@ class DietFormulator:
         # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Límites de inclusión máximos (si los hay)
+        # Límites de inclusión máximos y mínimos (si los hay)
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
