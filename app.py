@@ -201,8 +201,6 @@ with tabs[0]:
         for _, row in df_nutr.iterrows()
     }
     
-# ======================== BLOQUE 6: FORMULACIÓN AUTOMÁTICA, SOLO SELECCIÓN MATERIAS Y TIPO DE DIETA ========================
-
 with tabs[1]:
     st.header("Formulación automática de dieta")
 
@@ -224,30 +222,45 @@ with tabs[1]:
     ingredientes_df = load_ingredients(ingredientes_file)
 
     if ingredientes_df is not None and not ingredientes_df.empty:
-        # Limpia y convierte a numérico todas las columnas excepto Ingrediente
-        ingredientes_df = ingredientes_df.replace('.', 0)
+        # Limpia y convierte a numérico todas las columnas excepto Ingrediente y Categoría
         for col in ingredientes_df.columns:
-            if col != "Ingrediente":
+            if col not in ["Ingrediente", "Categoría"]:
                 ingredientes_df[col] = pd.to_numeric(ingredientes_df[col], errors='coerce').fillna(0)
 
-        st.subheader("Selecciona las materias primas para formular la dieta")
-        ingredientes_disp = ingredientes_df["Ingrediente"].tolist()
-        ingredientes_sel = st.multiselect(
-            "Ingredientes para la dieta",
-            ingredientes_disp,
-            default=[],
-            help="Elige los ingredientes que deseas usar en la mezcla.",
-            key="ingredientes_sel"
-        )
-        ingredientes_sel = list(dict.fromkeys(ingredientes_sel))
+        st.subheader("Selecciona las materias primas para formular la dieta por categoría")
+
+        # Lista de categorías principales
+        categorias = ["Proteinas", "Carbohidratos", "Grasas", "Vegetales", "Frutas", "Otros"]
+        ingredientes_seleccionados = []
+
+        categoria_map = {cat: cat for cat in categorias}  # Por si la matriz tiene diferencias de mayúsculas/minúsculas
+
+        # Mapeo robusto de categorías en el DataFrame
+        cat_in_df = ingredientes_df["Categoría"].dropna().unique()
+        # Normaliza categoría a mayúsculas para comparación
+        cat_in_df_upper = {str(c).strip().capitalize(): c for c in cat_in_df}
+
+        for cat in categorias:
+            df_cat = ingredientes_df[ingredientes_df["Categoría"].str.strip().str.capitalize() == cat]
+            if not df_cat.empty:
+                st.markdown(f"**{cat}**")
+                ing_cat = df_cat["Ingrediente"].tolist()
+                sel_cat = st.multiselect(
+                    f"Selecciona ingredientes de {cat}",
+                    ing_cat,
+                    default=[],
+                    key=f"select_{cat}"
+                )
+                ingredientes_seleccionados.extend(sel_cat)
 
         # Filtra solo los seleccionados
+        ingredientes_sel = list(dict.fromkeys(ingredientes_seleccionados))
         ingredientes_df_filtrado = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
 
         # === Menú abatible para editar materias primas seleccionadas ===
         with st.expander("Editar materias primas seleccionadas"):
             st.write("Ajusta los valores nutricionales y precio solo para los ingredientes seleccionados.")
-            editable_cols = [col for col in ingredientes_df_filtrado.columns if col != "Ingrediente"]
+            editable_cols = [col for col in ingredientes_df_filtrado.columns if col not in ["Ingrediente", "Categoría"]]
             ingredientes_df_filtrado = st.data_editor(
                 ingredientes_df_filtrado,
                 column_config={col: st.column_config.NumberColumn() for col in editable_cols},
@@ -262,7 +275,6 @@ with tabs[1]:
 
         if formulable:
             if st.button("Formular dieta automática"):
-                # Requerimientos automáticos: perfil de mascota + tipo de dieta
                 req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
                 # Aplica ajuste según tipo de dieta
                 if tipo_dieta == "Alta en proteína":
@@ -276,7 +288,6 @@ with tabs[1]:
                     req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
 
                 nutrientes_seleccionados = list(req_auto.keys())
-                # Mínimo automático para cada materia prima seleccionada
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
 
                 # Formulación SIN depender del precio, solo que cumpla nutrientes
@@ -284,8 +295,8 @@ with tabs[1]:
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
                     {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", 0)} for nut in nutrientes_seleccionados},
-                    limits={"min": {}, "max": {}},  # Sin máximos ni mínimos duros
-                    ratios=[],  # Sin ratios
+                    limits={"min": {}, "max": {}},
+                    ratios=[],
                     min_selected_ingredients=min_selected_ingredients,
                     diet_type=tipo_dieta
                 )
@@ -295,6 +306,7 @@ with tabs[1]:
                     st.session_state["last_cost"] = result["cost"]
                     st.session_state["last_nutritional_values"] = result["nutritional_values"]
                     st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
+                    st.session_state["ingredients_df"] = ingredientes_df_filtrado  # Para visualización y gráficos
                     st.success("¡Formulación realizada!")
                 else:
                     st.error("No se pudo formular la dieta: " + result.get("message", "Error desconocido"))
