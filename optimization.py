@@ -1,6 +1,12 @@
 import pulp
 import pandas as pd
 
+def fmt2(val):
+    try:
+        return round(float(val), 2)
+    except Exception:
+        return val
+
 class DietFormulator:
     def __init__(self, ingredients_df, nutrient_list, requirements, limits, ratios, min_selected_ingredients, diet_type):
         self.ingredients_df = ingredients_df
@@ -12,7 +18,6 @@ class DietFormulator:
         self.diet_type = diet_type
 
     def solve(self):
-        # --- Construir modelo PuLP ---
         prob = pulp.LpProblem("DietFormulation", pulp.LpMinimize)
 
         # Variables: proporción de cada ingrediente
@@ -20,16 +25,15 @@ class DietFormulator:
             i: pulp.LpVariable(f"ing_{i}", 0, 1) for i in self.ingredients_df.index
         }
 
-        # Slack variables para requerimientos nutricionales (violaciones)
+        # Slack variables para mínimos (permitimos violación para acercarse, pero NO para máximos)
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", 0) for nut in self.nutrient_list}
-        slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", 0) for nut in self.nutrient_list}
 
-        # Función objetivo: minimizar costo + penalización slacks (violaciones)
+        # Función objetivo: minimizar costo + penalización slacks
         total_cost = pulp.lpSum([
             ingredient_vars[i] * float(self.ingredients_df.loc[i, "precio"]) for i in self.ingredients_df.index
         ])
         total_slack = pulp.lpSum([
-            1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut] for nut in self.nutrient_list
+            1000 * slack_vars_min[nut] for nut in self.nutrient_list
         ])
         prob += total_cost + total_slack
 
@@ -45,7 +49,7 @@ class DietFormulator:
         # Restricciones de nutrientes requeridos
         for nut in self.nutrient_list:
             if nut in self.ingredients_df.columns:
-                # Mínimo
+                # Mínimo (permitimos slack)
                 req_min = self.requirements.get(nut, {}).get("min", None)
                 if req_min is not None and req_min != "":
                     prob += (
@@ -55,14 +59,14 @@ class DietFormulator:
                         ]) + slack_vars_min[nut]
                         >= float(req_min)
                     )
-                # Máximo
+                # Máximo (estricto, NO slack)
                 req_max = self.requirements.get(nut, {}).get("max", None)
                 if req_max is not None and req_max != "" and float(req_max) > 0:
                     prob += (
                         pulp.lpSum([
                             ingredient_vars[i] * float(self.ingredients_df.loc[i, nut])
                             for i in self.ingredients_df.index
-                        ]) - slack_vars_max[nut]
+                        ]) 
                         <= float(req_max)
                     )
 
@@ -80,18 +84,18 @@ class DietFormulator:
             amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
             ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
             if amount > 0:
-                diet[ingredient_name] = round(amount, 4)
+                diet[ingredient_name] = fmt2(amount)
                 total_cost_val += float(self.ingredients_df.loc[i, "precio"]) * (amount / 100) * 100
             if ingredient_name in self.min_selected_ingredients:
                 min_req = self.min_selected_ingredients[ingredient_name]
                 cumple_min = amount >= min_req
                 min_inclusion_status.append({
                     "Ingrediente": ingredient_name,
-                    "Incluido (%)": round(amount, 4),
-                    "Minimo requerido (%)": min_req,
+                    "Incluido (%)": fmt2(amount),
+                    "Minimo requerido (%)": fmt2(min_req),
                     "Cumple mínimo": "✔️" if cumple_min else "❌"
                 })
-        total_cost_val = round(total_cost_val, 2)
+        total_cost_val = fmt2(total_cost_val)
 
         # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
@@ -107,7 +111,7 @@ class DietFormulator:
                     if pd.isna(nut_val):
                         nut_val = 0.0
                     valor_nut += nut_val * (amount / 100)
-            nutritional_values[nutrient] = round(valor_nut, 4)
+            nutritional_values[nutrient] = fmt2(valor_nut)
 
         # Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
@@ -132,9 +136,9 @@ class DietFormulator:
                 pass
             compliance_data.append({
                 "Nutriente": nutrient,
-                "Mínimo": req_min,
-                "Máximo": req_max,
-                "Obtenido": round(obtenido, 4) if obtenido is not None and obtenido != "" else "",
+                "Mínimo": fmt2(req_min),
+                "Máximo": fmt2(req_max),
+                "Obtenido": fmt2(obtenido),
                 "Cumple": estado
             })
 
