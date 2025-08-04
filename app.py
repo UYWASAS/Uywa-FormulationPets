@@ -9,6 +9,7 @@ from profile import load_profile, save_profile, update_mascota_en_perfil
 from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
+from utils import fmt2
 
 # ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL SIN FOTO/NOMBRE MASCOTA ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
