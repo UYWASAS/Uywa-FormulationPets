@@ -201,7 +201,7 @@ with tabs[0]:
         for _, row in df_nutr.iterrows()
     }
     
-# ======================== BLOQUE DE FORMULACIÓN (with tabs[1]: Formulación) ========================
+# =========== BLOQUE DE FORMULACIÓN (with tabs[1]: Formulación) ===========
 with tabs[1]:
     st.header("Formulación automática de dieta")
 
@@ -284,7 +284,6 @@ with tabs[1]:
                     diet_type=tipo_dieta
                 )
                 result = formulator.solve()
-                # GUARDA EL RESULTADO COMPLETO AQUÍ
                 st.session_state["last_result"] = result
                 if result.get("success", False):
                     st.session_state["last_diet"] = result["diet"]
@@ -299,6 +298,7 @@ with tabs[1]:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
+# =========== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ===========
 with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
@@ -308,7 +308,6 @@ with tabs[2]:
         st.error("No se pudo formular una dieta que cumpla los requerimientos nutricionales con los ingredientes seleccionados. Revisa la selección o los mínimos requeridos.")
         st.markdown("La dieta mostrada a continuación es solo una solución de emergencia, no cumple requisitos nutricionales.")
 
-        # Mostrar lista de nutrientes que no cumplen
         comp_df = pd.DataFrame(result.get("compliance_data", []))
         if not comp_df.empty:
             no_cumplen = comp_df[comp_df["Cumple"] != "✔️"]["Nutriente"].tolist()
@@ -317,14 +316,26 @@ with tabs[2]:
 
         diet = result.get("diet", {})
         if diet:
-            res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+            res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in diet.items()], columns=["Ingrediente", "% Inclusión"])
             st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
         min_inclusion_status = result.get("min_inclusion_status", [])
         if min_inclusion_status:
-            df_min_cumpl = pd.DataFrame(min_inclusion_status)
+            df_min_cumpl = pd.DataFrame([
+                {
+                    "Ingrediente": d["Ingrediente"],
+                    "Incluido (%)": fmt2(d["Incluido (%)"]),
+                    "Minimo requerido (%)": fmt2(d["Minimo requerido (%)"]),
+                    "Cumple mínimo": d["Cumple mínimo"]
+                }
+                for d in min_inclusion_status
+            ])
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
         if not comp_df.empty:
-            st.dataframe(comp_df, use_container_width=True)
+            comp_df_fmt = comp_df.copy()
+            comp_df_fmt["Mínimo"] = comp_df_fmt["Mínimo"].apply(fmt2)
+            comp_df_fmt["Máximo"] = comp_df_fmt["Máximo"].apply(fmt2)
+            comp_df_fmt["Obtenido"] = comp_df_fmt["Obtenido"].apply(fmt2)
+            st.dataframe(comp_df_fmt, use_container_width=True)
     elif result.get("success", False):
         diet = result["diet"]
         total_cost = result["cost"]
@@ -333,25 +344,29 @@ with tabs[2]:
         req_auto = st.session_state.get("nutrientes_requeridos", {})
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
-        # --- Apartado 1: Composición óptima de la dieta ---
         st.subheader("Composición óptima de la dieta (%)")
-        res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+        res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in diet.items()], columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
-        # --- Apartado 2: Cumplimiento de mínimo de inclusión para ingredientes seleccionados ---
         if min_inclusion_status:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
-            df_min_cumpl = pd.DataFrame(min_inclusion_status)
+            df_min_cumpl = pd.DataFrame([
+                {
+                    "Ingrediente": d["Ingrediente"],
+                    "Incluido (%)": fmt2(d["Incluido (%)"]),
+                    "Minimo requerido (%)": fmt2(d["Minimo requerido (%)"]),
+                    "Cumple mínimo": d["Cumple mínimo"]
+                }
+                for d in min_inclusion_status
+            ])
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
 
-        # --- Apartado 3: Costos ---
-        st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
-        precio_kg = total_cost / 100 if total_cost else 0
-        precio_ton = precio_kg * 1000
-        st.metric(label="Precio por kg de dieta", value=f"${precio_kg:,.2f}")
-        st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:,.2f}")
+        st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost):.2f}", unsafe_allow_html=True)
+        precio_kg = fmt2(total_cost) / 100 if total_cost else 0
+        precio_ton = fmt2(precio_kg * 1000)
+        st.metric(label="Precio por kg de dieta", value=f"${fmt2(precio_kg):,.2f}")
+        st.metric(label="Precio por tonelada de dieta", value=f"${fmt2(precio_ton):,.2f}")
 
-        # --- Apartado 4: Composición nutricional y cumplimiento ---
         st.subheader("Composición nutricional y cumplimiento")
         if tipo_dieta == "Alta en proteína":
             req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
@@ -385,9 +400,9 @@ with tabs[2]:
                 pass
             comp_list.append({
                 "Nutriente": nut,
-                "Mínimo": min_r,
-                "Máximo": max_r,
-                "Obtenido": round(obtenido, 4) if obtenido is not None and obtenido != "" else "",
+                "Mínimo": fmt2(min_r),
+                "Máximo": fmt2(max_r),
+                "Obtenido": fmt2(obtenido),
                 "Cumple": cumple
             })
         comp_df = pd.DataFrame(comp_list)
