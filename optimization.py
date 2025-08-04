@@ -37,7 +37,6 @@ class DietFormulator:
                 self.requirements["Carbohidrato"] = {"min": 6.0, "max": 9.0}
 
     def run(self):
-        # 1. Crear el modelo de minimización de coste SIN restricciones nutricionales
         prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
         ingredient_vars = pulp.LpVariable.dicts(
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
@@ -48,7 +47,7 @@ class DietFormulator:
             float(self.ingredients_df.loc[i, "precio"]) * ingredient_vars[i]
             for i in self.ingredients_df.index
         ]), "Total_Cost"
-        # La suma de ingredientes debe ser 100% (1)
+        # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
         # Límites de inclusión máximos (si los hay)
@@ -58,7 +57,6 @@ class DietFormulator:
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
         # No agregar restricciones nutricionales duras
-
         # No agregar ratios
 
         prob.solve()
@@ -112,14 +110,22 @@ class DietFormulator:
                 req_max = req.get("max", "")
                 obtenido = nutritional_values.get(nutrient, None)
                 estado = "✔️"
-                if obtenido is None or obtenido == "":
+                # Comparar mínimos
+                try:
+                    req_min_f = float(req_min)
+                    obtenido_f = float(obtenido)
+                    if obtenido_f < req_min_f:
+                        estado = "❌"
+                except (ValueError, TypeError):
                     estado = "❌"
-                elif req_min and obtenido < req_min:
-                    estado = "❌"
-                elif req_max and obtenido > req_max:
-                    estado = "❌"
-                else:
-                    estado = "✔️"
+                # Comparar máximos
+                try:
+                    req_max_f = float(req_max)
+                    obtenido_f = float(obtenido)
+                    if req_max_f != 0 and obtenido_f > req_max_f:
+                        estado = "❌"
+                except (ValueError, TypeError):
+                    pass
                 compliance_data.append({
                     "Nutriente": nutrient,
                     "Mínimo": req_min,
@@ -137,7 +143,6 @@ class DietFormulator:
             }
         else:
             # SIEMPRE devolver una solución, aunque sea solo el ingrediente más barato
-            # Intenta poner 100% del ingrediente más barato
             idx_min = self.ingredients_df["precio"].idxmin()
             ingredient_name = self.ingredients_df.loc[idx_min, "Ingrediente"]
             diet = {ingredient_name: 100.0}
@@ -153,9 +158,13 @@ class DietFormulator:
                 req_max = req.get("max", "")
                 obtenido = nutritional_values.get(nutrient, None)
                 estado = "❌"
-                if obtenido is not None and obtenido != "":
-                    if req_min and obtenido >= req_min and (not req_max or obtenido <= req_max):
+                try:
+                    req_min_f = float(req_min)
+                    obtenido_f = float(obtenido)
+                    if obtenido_f >= req_min_f and (not req_max or float(req_max) == 0 or obtenido_f <= float(req_max)):
                         estado = "✔️"
+                except (ValueError, TypeError):
+                    estado = "❌"
                 compliance_data.append({
                     "Nutriente": nutrient,
                     "Mínimo": req_min,
