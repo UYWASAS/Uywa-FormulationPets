@@ -205,6 +205,7 @@ with tabs[0]:
 
 with tabs[1]:
     st.header("Formulación automática de dieta")
+
     mascota = st.session_state.get("profile", {}).get("mascota", {})
     nombre_mascota = mascota.get("nombre", "Mascota")
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
@@ -241,11 +242,18 @@ with tabs[1]:
         ingredientes_sel = list(dict.fromkeys(ingredientes_sel))
 
         # Filtra solo los seleccionados
-        if ingredientes_sel:
-            df_edit = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
-            ingredientes_df_filtrado = df_edit.copy()
-        else:
-            ingredientes_df_filtrado = pd.DataFrame()
+        ingredientes_df_filtrado = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
+
+        # === Menú abatible para editar materias primas seleccionadas ===
+        with st.expander("Editar materias primas seleccionadas"):
+            st.write("Ajusta los valores nutricionales y precio solo para los ingredientes seleccionados.")
+            editable_cols = [col for col in ingredientes_df_filtrado.columns if col != "Ingrediente"]
+            ingredientes_df_filtrado = st.data_editor(
+                ingredientes_df_filtrado,
+                column_config={col: st.column_config.NumberColumn() for col in editable_cols},
+                use_container_width=True,
+                key="editor_materias_seleccionadas"
+            )
 
         st.write(f"Ingredientes seleccionados: {', '.join(ingredientes_sel) if ingredientes_sel else 'Ninguno'}")
 
@@ -271,7 +279,7 @@ with tabs[1]:
                 # Mínimo automático para cada materia prima seleccionada
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
 
-                # Formulación
+                # Formulación SIN depender del precio, solo que cumpla nutrientes
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
