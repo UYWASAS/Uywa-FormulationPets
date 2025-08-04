@@ -5,7 +5,7 @@ NUTRIENTES_REFERENCIA_PERRO = {
     "Ácido Linoleico":  {"min": 0.325, "max": 1.625, "unit": "g/100g"},
     "Ca":               {"min": 0.25, "max": 0.4, "unit": "g/100g"},
     "P":                {"min": 0.225, "max": None, "unit": "g/100g"},
-    "Na":               {"min": 0.055, "max": None, "unit": "g/100g"},
+    "Na":               {"min": 0.055, "max": 0.08, "unit": "g/100g"},
     "Cl":               {"min": 0.085, "max": None, "unit": "g/100g"},
     "Lisina":           {"min": 0.22, "max": 0.7, "unit": "g/100g"},
     "Metionina":        {"min": 0.088, "max": None, "unit": "g/100g"},
