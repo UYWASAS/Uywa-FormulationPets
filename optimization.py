@@ -3,7 +3,18 @@ import pandas as pd
 from utils import fmt2  # SOLO el import, NO la definición de la función aquí
 
 class DietFormulator:
-    def __init__(self, ingredients_df, nutrient_list, requirements, limits, ratios, min_selected_ingredients, diet_type):
+    def __init__(
+        self,
+        ingredients_df,
+        nutrient_list,
+        requirements,
+        limits,
+        ratios,
+        min_selected_ingredients,
+        diet_type,
+        max_proteinas_pct=None,
+        proteinas_indices=None
+    ):
         self.ingredients_df = ingredients_df
         self.nutrient_list = nutrient_list
         self.requirements = requirements
@@ -11,6 +22,8 @@ class DietFormulator:
         self.ratios = ratios
         self.min_selected_ingredients = min_selected_ingredients
         self.diet_type = diet_type
+        self.max_proteinas_pct = max_proteinas_pct
+        self.proteinas_indices = proteinas_indices
 
     def solve(self):
         prob = pulp.LpProblem("DietFormulation", pulp.LpMinimize)
@@ -35,6 +48,10 @@ class DietFormulator:
         # Restricción: suma de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1
 
+        # Restricción: suma de ingredientes proteicos <= máximo permitido (opcional)
+        if self.max_proteinas_pct is not None and self.proteinas_indices is not None and len(self.proteinas_indices) > 0:
+            prob += pulp.lpSum([ingredient_vars[i] for i in self.proteinas_indices]) <= self.max_proteinas_pct
+
         # Restricciones de mínimos de inclusión
         for ing, min_val in self.min_selected_ingredients.items():
             idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ing].index
@@ -56,14 +73,19 @@ class DietFormulator:
                     )
                 # Máximo (estricto, NO slack)
                 req_max = self.requirements.get(nut, {}).get("max", None)
-                if req_max is not None and req_max != "" and float(req_max) > 0:
-                    prob += (
-                        pulp.lpSum([
-                            ingredient_vars[i] * float(self.ingredients_df.loc[i, nut])
-                            for i in self.ingredients_df.index
-                        ]) 
-                        <= float(req_max)
-                    )
+                # SOLO restringe si max existe y es numérico y mayor a 0 (no restringe proteína si max es None)
+                if req_max is not None and req_max != "" and str(req_max).lower() != "none":
+                    try:
+                        if float(req_max) > 0:
+                            prob += (
+                                pulp.lpSum([
+                                    ingredient_vars[i] * float(self.ingredients_df.loc[i, nut])
+                                    for i in self.ingredients_df.index
+                                ]) 
+                                <= float(req_max)
+                            )
+                    except Exception:
+                        pass
 
         # Resuelve el modelo
         prob.solve()
