@@ -10,23 +10,19 @@ class DietFormulator:
         limits=None,
         selected_species=None,
         selected_stage=None,
-        ratios=None
+        ratios=None,
+        min_selected_ingredients=None,  # <--- NUEVO
+        diet_type=None                  # <--- NUEVO
     ):
         """
         ingredients_df: DataFrame con columnas de nutrientes, precio e 'Ingrediente'
         nutrient_list: lista de nombres de nutrientes a optimizar y analizar
         requirements: dict {nutriente: {"min": valor_min, "max": valor_max}}
         limits: dict {"min": {ing: vmin}, "max": {ing: vmax}} (en %)
+        min_selected_ingredients: dict {ing_name: min_inclusion} materias primas seleccionadas y su mínimo
+        diet_type: str, tipo de dieta objetivo ("Alta en proteína", "Equilibrada", "Alta en carbohidratos")
         selected_species, selected_stage: opcionales, por compatibilidad
-        ratios: lista de dicts con ratios, por ejemplo:
-            [
-                {
-                    "numerador": "LYS_DR",
-                    "denominador": "THR_DR",
-                    "operador": ">=",
-                    "valor": 0.8
-                }
-            ]
+        ratios: lista de dicts con ratios, por ejemplo...
         """
         self.nutrient_list = nutrient_list
         self.requirements = requirements
@@ -35,6 +31,20 @@ class DietFormulator:
         self.selected_stage = selected_stage
         self.limits = limits if limits else {"min": {}, "max": {}}
         self.ratios = ratios or []
+        self.min_selected_ingredients = min_selected_ingredients or {}
+        self.diet_type = diet_type
+
+        # === Ajuste de requerimientos según tipo de dieta ===
+        if self.diet_type:
+            if self.diet_type == "Alta en proteína":
+                self.requirements["Proteína"] = {"min": 6.0, "max": 9.0}
+                self.requirements["Carbohidrato"] = {"min": 2.0, "max": 5.0}
+            elif self.diet_type == "Equilibrada":
+                self.requirements["Proteína"] = {"min": 4.0, "max": 6.0}
+                self.requirements["Carbohidrato"] = {"min": 4.0, "max": 6.0}
+            elif self.diet_type == "Alta en carbohidratos":
+                self.requirements["Proteína"] = {"min": 2.0, "max": 4.0}
+                self.requirements["Carbohidrato"] = {"min": 6.0, "max": 9.0}
 
     def run(self):
         prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
@@ -49,13 +59,12 @@ class DietFormulator:
         # Suma total de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Límites de inclusión por ingrediente
+        # Límites de inclusión por ingrediente (solo máximos como duros, los mínimos automáticos solo se chequean en resultados)
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
-            min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
-            prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
+            # Si quieres poner mínimos duros, pon aquí. Si no quieres bloquear la dieta nunca, no los pongas.
 
         # Restricciones nutricionales según requirements (solo si min o max distinto de 0)
         for nutrient in self.nutrient_list:
@@ -123,14 +132,27 @@ class DietFormulator:
         total_cost = 0
         nutritional_values = {}
         compliance_data = []
+        min_inclusion_status = []
 
         if pulp.LpStatus[prob.status] == "Optimal":
             for i in self.ingredients_df.index:
                 amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
+                ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
                 if amount > 0:
-                    ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
                     diet[ingredient_name] = round(amount, 4)
                     total_cost += float(self.ingredients_df.loc[i, "precio"]) * (amount / 100) * 100
+
+                # Chequeo visual de mínimos automáticos para ingredientes seleccionados
+                if ingredient_name in self.min_selected_ingredients:
+                    min_req = self.min_selected_ingredients[ingredient_name]
+                    cumple_min = amount >= min_req
+                    min_inclusion_status.append({
+                        "Ingrediente": ingredient_name,
+                        "Incluido (%)": round(amount, 4),
+                        "Minimo requerido (%)": min_req,
+                        "Cumple mínimo": "✔️" if cumple_min else "❌"
+                    })
+
             total_cost = round(total_cost, 2)
 
             # SIEMPRE calcular todos los nutrientes seleccionados, tengan o no restricción
@@ -186,7 +208,8 @@ class DietFormulator:
                 "diet": diet,
                 "cost": total_cost,
                 "nutritional_values": nutritional_values,
-                "compliance_data": compliance_data
+                "compliance_data": compliance_data,
+                "min_inclusion_status": min_inclusion_status
             }
         else:
             return {
@@ -194,7 +217,8 @@ class DietFormulator:
                 "diet": {},
                 "cost": 0,
                 "nutritional_values": {},
-                "compliance_data": []
+                "compliance_data": [],
+                "min_inclusion_status": []
             }
 
     # Alias para compatibilidad con apps que llaman .solve()
