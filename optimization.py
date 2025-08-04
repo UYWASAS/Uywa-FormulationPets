@@ -13,7 +13,7 @@ class DietFormulator:
         ratios=None,
         min_selected_ingredients=None,
         diet_type=None,
-        min_num_ingredientes=3,  # Número mínimo de ingredientes en mezcla
+        min_num_ingredientes=3,
     ):
         self.nutrient_list = nutrient_list
         self.requirements = requirements
@@ -26,7 +26,7 @@ class DietFormulator:
         self.diet_type = diet_type
         self.min_num_ingredientes = min_num_ingredientes
 
-        # Restricciones según perfil de dieta
+        # Restricciones obligatorias según perfil de dieta
         if self.diet_type:
             if self.diet_type == "Alta en proteína":
                 self.requirements["Proteína"] = {"min": 6.0, "max": 9.0}
@@ -55,14 +55,14 @@ class DietFormulator:
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
             prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-        # --- Penalización por incumplimiento nutricional (slacks) ---
+        # Penalización por incumplimiento nutricional (slacks)
         slacks_min = {}
         slacks_max = {}
         for nutrient in self.nutrient_list:
             slacks_min[nutrient] = pulp.LpVariable(f"slack_min_{nutrient}", lowBound=0, cat="Continuous")
             slacks_max[nutrient] = pulp.LpVariable(f"slack_max_{nutrient}", lowBound=0, cat="Continuous")
 
-        # --- Restricciones nutricionales obligatorias (según perfil de dieta) ---
+        # Restricciones nutricionales obligatorias (según perfil de dieta)
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", None)
@@ -76,7 +76,7 @@ class DietFormulator:
                 if req_max is not None and str(req_max) != "" and float(req_max) > 0:
                     prob += nut_sum - slacks_max[nutrient] <= float(req_max), f"Max_{nutrient}"
 
-        # --- Mínimo de ingredientes presentes (variedad) ---
+        # Mínimo de ingredientes presentes (variedad)
         present = {i: pulp.LpVariable(f"present_{i}", cat="Binary") for i in self.ingredients_df.index}
         big_M = 1.0
         for i in self.ingredients_df.index:
@@ -84,7 +84,7 @@ class DietFormulator:
             prob += ingredient_vars[i] <= big_M * present[i]
         prob += pulp.lpSum([present[i] for i in self.ingredients_df.index]) >= self.min_num_ingredientes
 
-        # --- Función objetivo: penalización fuerte incumplimiento + precio ponderado ---
+        # Función objetivo: penalización fuerte incumplimiento + precio ponderado
         prob += (
             100 * pulp.lpSum([slacks_min[nut] for nut in self.nutrient_list]) +
             100 * pulp.lpSum([slacks_max[nut] for nut in self.nutrient_list]) +
@@ -142,7 +142,6 @@ class DietFormulator:
                 req_max = req.get("max", "")
                 obtenido = nutritional_values.get(nutrient, None)
                 estado = "✔️"
-                # Comparar mínimos
                 try:
                     req_min_f = float(req_min)
                     obtenido_f = float(obtenido)
@@ -150,7 +149,6 @@ class DietFormulator:
                         estado = "❌"
                 except (ValueError, TypeError):
                     estado = "❌"
-                # Comparar máximos
                 try:
                     req_max_f = float(req_max)
                     obtenido_f = float(obtenido)
