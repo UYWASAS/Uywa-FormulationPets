@@ -1,5 +1,14 @@
-def fmt2(val):
+def fmt2(x):
     try:
-        return round(float(val), 2)
+        f = float(x)
+        return f"{f:,.2f}"
     except Exception:
-        return val
+        return x
+
+def safe_float(val, default=0.0):
+    try:
+        if isinstance(val, str):
+            val = val.replace(",", ".")
+        return float(val)
+    except Exception:
+        return default
