@@ -292,6 +292,9 @@ with tabs[2]:
         res_df = res_df[mask_numerico]
         res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
 
+        # DEPURACIÓN: muestra suma total en la interfaz
+        suma_inclusion = res_df["% Inclusión"].sum()
+        st.warning(f"Suma total de inclusión mostrada: {fmt2(suma_inclusion)} %")
         if ingredientes_omitidos:
             st.warning(f"Estos ingredientes tienen inclusión fuera de rango o error y fueron omitidos: {', '.join(ingredientes_omitidos)}")
 
@@ -332,6 +335,10 @@ with tabs[2]:
             })
         comp_df = pd.DataFrame(comp_list)
         st.dataframe(comp_df, use_container_width=True)
+
+        # Muestra mensaje del backend si existe
+        if "message" in result and result["message"]:
+            st.error(result["message"])
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
 
