@@ -287,9 +287,9 @@ with tabs[1]:
                 # GUARDA EL RESULTADO COMPLETO AQUÍ
                 st.session_state["last_result"] = result
                 if result.get("success", False):
-                    st.session_state["last_diet"] = result["diet"]
-                    st.session_state["last_cost"] = result["cost"]
-                    st.session_state["last_nutritional_values"] = result["nutritional_values"]
+                    st.session_state["last_diet"] = result.get("diet", {})
+                    st.session_state["last_cost"] = result.get("cost", 0)
+                    st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
                     st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
                     st.session_state["ingredients_df"] = ingredientes_df_filtrado
                     st.success("¡Formulación realizada!")
@@ -327,9 +327,9 @@ with tabs[2]:
         if not comp_df.empty:
             st.dataframe(comp_df, use_container_width=True)
     elif result.get("success", False):
-        diet = result["diet"]
-        total_cost = result["cost"]
-        nutritional_values = result["nutritional_values"]
+        diet = result.get("diet", {})
+        total_cost = result.get("cost", 0)
+        nutritional_values = result.get("nutritional_values", {})
         min_inclusion_status = result.get("min_inclusion_status", [])
         req_auto = st.session_state.get("nutrientes_requeridos", {})
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
