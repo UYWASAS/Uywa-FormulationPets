@@ -271,75 +271,76 @@ with tabs[1]:
 with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
-    if result is None:
-        st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
-    elif result.get("success", False):
-        diet = result.get("diet", {})
-        total_cost = result.get("cost", 0)
-        nutritional_values = result.get("nutritional_values", {})
-        min_inclusion_status = result.get("min_inclusion_status", [])
-        req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
-        tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
-        for nut in ["Proteína", "Carbohidrato"]:
-            if nut in req_auto:
-                del req_auto[nut]
-        st.subheader("Composición óptima de la dieta (%)")
 
-        # FILTRA VALORES NO NUMÉRICOS ANTES DE MOSTRAR Y CALCULAR
-        res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
-        mask_numerico = pd.to_numeric(res_df["% Inclusión"], errors="coerce").notnull()
-        ingredientes_omitidos = res_df.loc[~mask_numerico, "Ingrediente"].tolist()
-        res_df = res_df[mask_numerico]
-        res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
+    # Mostrar error si el modelo es inviable o hay problemas de mínimos
+    if result is None or not result.get("success", False):
+        st.error(result.get("message", "No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior."))
+        st.stop()
 
-        suma_inclusion = res_df["% Inclusión"].sum()
-        st.warning(f"Suma total de inclusión mostrada: {fmt2(suma_inclusion)} %")
-        if ingredientes_omitidos:
-            st.warning(f"Estos ingredientes tienen inclusión fuera de rango o error y fueron omitidos: {', '.join(ingredientes_omitidos)}")
+    diet = result.get("diet", {})
+    total_cost = result.get("cost", 0)
+    nutritional_values = result.get("nutritional_values", {})
+    min_inclusion_status = result.get("min_inclusion_status", [])
+    req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
+    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+    for nut in ["Proteína", "Carbohidrato"]:
+        if nut in req_auto:
+            del req_auto[nut]
+    st.subheader("Composición óptima de la dieta (%)")
 
-        st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
+    # FILTRA VALORES NO NUMÉRICOS ANTES DE MOSTRAR Y CALCULAR
+    res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+    mask_numerico = pd.to_numeric(res_df["% Inclusión"], errors="coerce").notnull()
+    ingredientes_omitidos = res_df.loc[~mask_numerico, "Ingrediente"].tolist()
+    res_df = res_df[mask_numerico]
+    res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
 
-        st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
-        precio_kg = total_cost / 100 if total_cost else 0
-        precio_ton = precio_kg * 1000
-        st.metric(label="Precio por kg de dieta", value=f"${fmt2(precio_kg)}")
-        st.metric(label="Precio por tonelada de dieta", value=f"${fmt2(precio_ton)}")
-        st.subheader("Composición nutricional y cumplimiento")
-        comp_list = []
-        for nut, req in req_auto.items():
-            min_r = req.get("min", "")
-            max_r = req.get("max", "")
-            obtenido = nutritional_values.get(nut, None)
-            cumple = "✔️"
-            try:
-                min_r_f = float(min_r)
-                obtenido_f = float(obtenido)
-                if obtenido_f < min_r_f:
-                    cumple = "❌"
-            except (ValueError, TypeError):
+    suma_inclusion = res_df["% Inclusión"].sum()
+    st.warning(f"Suma total de inclusión mostrada: {suma_inclusion:.2f} %")
+    if ingredientes_omitidos:
+        st.warning(f"Estos ingredientes tienen inclusión fuera de rango o error y fueron omitidos: {', '.join(ingredientes_omitidos)}")
+
+    st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+
+    st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
+    precio_kg = total_cost / 100 if total_cost else 0
+    precio_ton = precio_kg * 1000
+    st.metric(label="Precio por kg de dieta", value=f"${precio_kg:.2f}")
+    st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:.2f}")
+    st.subheader("Composición nutricional y cumplimiento")
+    comp_list = []
+    for nut, req in req_auto.items():
+        min_r = req.get("min", "")
+        max_r = req.get("max", "")
+        obtenido = nutritional_values.get(nut, None)
+        cumple = "✔️"
+        try:
+            min_r_f = float(min_r)
+            obtenido_f = float(obtenido)
+            if obtenido_f < min_r_f:
                 cumple = "❌"
-            try:
-                max_r_f = float(max_r)
-                obtenido_f = float(obtenido)
-                if max_r_f != 0 and obtenido_f > max_r_f:
-                    cumple = "❌"
-            except (ValueError, TypeError):
-                pass
-            comp_list.append({
-                "Nutriente": nut,
-                "Mínimo": fmt2(min_r),
-                "Máximo": fmt2(max_r),
-                "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
-                "Cumple": cumple
-            })
-        comp_df = pd.DataFrame(comp_list)
-        st.dataframe(comp_df, use_container_width=True)
+        except (ValueError, TypeError):
+            cumple = "❌"
+        try:
+            max_r_f = float(max_r)
+            obtenido_f = float(obtenido)
+            if max_r_f != 0 and obtenido_f > max_r_f:
+                cumple = "❌"
+        except (ValueError, TypeError):
+            pass
+        comp_list.append({
+            "Nutriente": nut,
+            "Mínimo": min_r,
+            "Máximo": max_r,
+            "Obtenido": f"{obtenido:.2f}" if obtenido is not None and obtenido != "" else "",
+            "Cumple": cumple
+        })
+    comp_df = pd.DataFrame(comp_list)
+    st.dataframe(comp_df, use_container_width=True)
 
-        # Muestra mensaje del backend si existe
-        if "message" in result and result["message"]:
-            st.error(result["message"])
-    else:
-        st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
+    # Mensaje adicional si el modelo se resolvió pero la suma no da 100%
+    if "message" in result and result["message"]:
+        st.error(result["message"])
 
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
