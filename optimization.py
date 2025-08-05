@@ -79,7 +79,7 @@ class DietFormulator:
             if max_inc < 1.0:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
-        # --------- RESTRICCIONES POR CATEGORÍA (excepto proteínas) ---------
+        # --------- RESTRICCIONES POR CATEGORÍA (excepto proteínas y carbohidratos) ---------
         for i in self.ingredients_df.index:
             cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
             if cat_val not in ["Proteinas", "Carbohidratos"]:
@@ -158,7 +158,8 @@ class DietFormulator:
             inclusion_raw.append(amount if amount is not None else 0)
             ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
             if amount is not None and amount > 0 and amount <= 1.01:
-                diet[ingredient_name] = float(fmt2(amount * 100))
+                # ¡NO multipliques por 100 aquí!
+                diet[ingredient_name] = float(fmt2(amount))
                 total_cost_value += float(self.ingredients_df.loc[i, "precio"]) * amount * 100
             elif amount is not None and amount > 1.01:
                 print(f"WARNING: {ingredient_name} tiene inclusión fuera de rango: {amount}")
@@ -225,7 +226,7 @@ class DietFormulator:
 
         result_dict = {
             "success": True,
-            "diet": diet,
+            "diet": diet,  # diet en proporción 0-1
             "cost": total_cost_value,
             "nutritional_values": nutritional_values,
             "compliance_data": compliance_data,
