@@ -278,7 +278,7 @@ with tabs[1]:
                 nutrientes_seleccionados = list(req_auto.keys())
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
 
-                # Si deseas limitar la suma de ingredientes proteicos
+                # Limite de proteicos opcional
                 max_proteinas_pct = st.slider("Máximo porcentaje de materias primas proteicas en la mezcla", 0.0, 1.0, 1.0)
                 proteinas_indices = ingredientes_df_filtrado[ingredientes_df_filtrado["Categoría"].str.strip().str.capitalize() == "Proteinas"].index.tolist()
 
@@ -294,20 +294,22 @@ with tabs[1]:
                     proteinas_indices=proteinas_indices
                 )
                 result = formulator.solve()
+                # GUARDA SIEMPRE EL RESULTADO, aunque sea fallback/subóptimo
                 st.session_state["last_result"] = result
+                st.session_state["last_diet"] = result.get("diet", {})
+                st.session_state["last_cost"] = result.get("cost", 0)
+                st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
+                st.session_state["ingredients_df"] = ingredientes_df_filtrado
+                st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
+
                 if result.get("success", False):
-                    st.session_state["last_diet"] = result["diet"]
-                    st.session_state["last_cost"] = result["cost"]
-                    st.session_state["last_nutritional_values"] = result["nutritional_values"]
-                    st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
-                    st.session_state["ingredients_df"] = ingredientes_df_filtrado
                     st.success("¡Formulación realizada!")
                 else:
                     st.error(result.get("message", "No se pudo formular la dieta."))
         else:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
-# =========== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ===========
+# ======================== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ========================
 with tabs[2]:
     st.header("Editar inclusión y reformular dieta")
 
