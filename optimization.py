@@ -85,8 +85,7 @@ class DietFormulator:
             if cat_val not in ["Proteinas", "Carbohidratos"]:
                 prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
 
-        # --------- ELIMINADA LA RESTRICCIÓN DE MÍNIMO TOTAL DE PROTEÍNAS SEGÚN TIPO DE DIETA ---------
-        # (Ya no existe el bloque que obligaba mínimo de proteínas por tipo de dieta)
+        # --------- ELIMINADA RESTRICCIÓN DE MÍNIMO DE PROTEÍNAS POR CATEGORÍA ---------
 
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
@@ -139,14 +138,12 @@ class DietFormulator:
         prob.solve()
 
         # DEPURACIÓN: imprime valores crudos y suma
-        print("===== DEPURACIÓN: VALORES RAW DE INCLUSIÓN =====")
-        suma_raw = 0
+        print("===== DEPURACIÓN FINAL =====")
         for i in self.ingredients_df.index:
             name = self.ingredients_df.loc[i, "Ingrediente"]
             val = ingredient_vars[i].varValue
             print(f"{name}: {val}")
-            if val is not None:
-                suma_raw += val
+        suma_raw = sum([ingredient_vars[i].varValue for i in self.ingredients_df.index if ingredient_vars[i].varValue is not None])
         print(f"Suma total de inclusión RAW (debería ser 1.0): {suma_raw}")
 
         diet = {}
