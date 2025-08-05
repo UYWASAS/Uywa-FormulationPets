@@ -48,21 +48,22 @@ class DietFormulator:
                         self.categorias_indices[cat].append(i)
 
     def run(self):
-        prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
-        ingredient_vars = pulp.LpVariable.dicts(
-            "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
-        )
-
-        # --------- DEPURACIÓN DE MÍNIMOS DE INCLUSIÓN Y AJUSTE DE LÓGICA ----------
-        # Solo pone mínimo de inclusión a los ingredientes SI el usuario lo pide explícitamente o si es crítico.
-        # Si seleccionas muchos ingredientes, NO impongas mínimo a todos.
-        # Aquí solo pondremos mínimo a los ingredientes en min_selected_ingredients (que debe ser controlado en el frontend).
-
+        # --------- VALIDACIÓN DE MÍNIMOS DE INCLUSIÓN ANTES DE CREAR EL MODELO ----------
         suma_minimos = sum([
             self.min_selected_ingredients.get(self.ingredients_df.loc[i, "Ingrediente"], 0)
             for i in self.ingredients_df.index
         ])
-        print(f"Suma de mínimos de inclusión forzados: {suma_minimos}")
+        if suma_minimos > 1.0:
+            print(f"ERROR: La suma de mínimos de inclusión es {suma_minimos} (>1.0). Modelo inviable.")
+            return {
+                "success": False,
+                "message": f"Error: La suma de mínimos de inclusión de ingredientes seleccionados es {suma_minimos * 100:.2f}%, mayor al 100%. Elige menos ingredientes o reduce los mínimos."
+            }
+
+        prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
+        ingredient_vars = pulp.LpVariable.dicts(
+            "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
+        )
 
         # --------- RESTRICCIÓN DE SUMA ---------
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
@@ -70,11 +71,10 @@ class DietFormulator:
         # --------- RESTRICCIONES INDIVIDUALES ---------
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
+            # Solo pone mínimo si el usuario lo pide explícitamente en min_selected_ingredients
             if ing_name in self.min_selected_ingredients and self.min_selected_ingredients[ing_name] > 0:
                 prob += ingredient_vars[i] >= self.min_selected_ingredients[ing_name], f"MinInc_{ing_name}"
-            # Puedes poner máximos personalizados aquí si lo necesitas, pero no mínimos genéricos a todos
-
-            # Si tienes límites por ingrediente en self.limits, úsalos:
+            # Aplica máximo si está definido (en self.limits)
             max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
             if max_inc < 1.0:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
