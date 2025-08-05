@@ -310,6 +310,7 @@ with tabs[1]:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
 # ======================== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ========================
+
 with tabs[2]:
     st.header("Editar inclusión y reformular dieta")
 
