@@ -318,7 +318,8 @@ with tabs[2]:
         diet = result.get("diet", {})
         if diet:
             res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
-@@ -315,7 +323,6 @@
+            st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+        min_inclusion_status = result.get("min_inclusion_status", [])
         if min_inclusion_status:
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
@@ -326,7 +327,10 @@ with tabs[2]:
         if not comp_df.empty:
             st.dataframe(comp_df, use_container_width=True)
     elif result.get("success", False):
-@@ -326,588 +333,594 @@
+        diet = result["diet"]
+        total_cost = result["cost"]
+        nutritional_values = result["nutritional_values"]
+        min_inclusion_status = result.get("min_inclusion_status", [])
         req_auto = st.session_state.get("nutrientes_requeridos", {})
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
 
