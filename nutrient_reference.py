@@ -1,6 +1,6 @@
 NUTRIENTES_REFERENCIA_PERRO = {
     "Proteina":         {"min": 6.25, "max": None, "unit": "g/100g"},
-    "EM":               {"min": 1000, "max": None, "unit": "kcal/kg"},
+    "EM":               {"min": 1000, "max": 1100, "unit": "kcal/kg"},
     "Grasa":            {"min": 2.125, "max": None, "unit": "g/100g"},
     "Ácido Linoleico":  {"min": 0.325, "max": 1.625, "unit": "g/100g"},
     "Ca":               {"min": 0.25, "max": 0.4, "unit": "g/100g"},
