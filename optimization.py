@@ -1,7 +1,7 @@
 import pulp
 import pandas as pd
 import math
-from utils import fmt2  # asegúrate que fmt2 está en utils.py
+from utils import fmt2
 
 class DietFormulator:
     MACRO_MIN_NUTRIENTS = [
@@ -38,6 +38,7 @@ class DietFormulator:
         self.min_inclusion_pct = min_inclusion_pct
         self.max_inclusion_pct = max_inclusion_pct
 
+        # Categorías principales para restricciones
         self.categorias_principales = ["Proteinas", "Carbohidratos", "Grasas", "Vegetales", "Frutas", "Otros"]
         self.categorias_indices = {cat: [] for cat in self.categorias_principales}
         if "Categoría" in self.ingredients_df.columns:
@@ -54,6 +55,7 @@ class DietFormulator:
         )
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
+        # Restricción: Mínimo de inclusión para ingredientes seleccionados
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             if ing_name in self.min_selected_ingredients:
@@ -64,6 +66,22 @@ class DietFormulator:
                 min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
                 prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
+
+        # Restricción: Ningún ingrediente que NO sea proteína o carbohidrato puede superar el 10%
+        for i in self.ingredients_df.index:
+            cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
+            if cat_val not in ["Proteinas", "Carbohidratos"]:
+                prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
+
+        # Restricción: Mínimo de inclusión de fuentes proteicas según tipo de dieta
+        min_proteina = 0.8 if self.diet_type == "Alta en proteína" else \
+                       0.5 if self.diet_type == "Equilibrada" else \
+                       0.3 if self.diet_type == "Alta en carbohidratos" else 0.0
+
+        proteicos_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize() == "Proteinas"]
+
+        if proteicos_idx and min_proteina > 0:
+            prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= min_proteina, "MinProteicosSegunTipo"
 
         # Variables slack para requerimientos nutricionales (solo para no-macros/min)
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
