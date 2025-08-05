@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (AJUSTE PROPORCIONAL DE REQUERIMIENTOS, EM y EM_1) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -159,7 +159,6 @@ with tabs[0]:
     requerimientos_ajustados = []
     for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
         unidad = info["unit"]
-        # EM ajusta mostrando valor calculado y nombre correcto
         if nutr == "EM" and unidad == "kcal/kg":
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
@@ -167,7 +166,6 @@ with tabs[0]:
                 "Max": None,
                 "Unidad": unidad
             })
-        # EM_1 también debe ajustarse proporcionalmente
         elif nutr == "EM_1" and unidad == "kcal/g":
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
@@ -177,7 +175,6 @@ with tabs[0]:
                 "Max": max_aj,
                 "Unidad": unidad
             })
-        # Ajusta g/100g o g/kg proporcionalmente
         elif unidad in ["g/100g", "g/kg"]:
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
@@ -202,7 +199,7 @@ with tabs[0]:
         for _, row in df_nutr.iterrows()
     }
 
-# ======================== BLOQUE DE FORMULACIÓN (with tabs[1]: Formulación) ========================
+# ======================== BLOQUE DE FORMULACIÓN ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -287,13 +284,19 @@ with tabs[2]:
             if nut in req_auto:
                 del req_auto[nut]
         st.subheader("Composición óptima de la dieta (%)")
+
+        # FILTRA VALORES NO NUMÉRICOS ANTES DE MOSTRAR Y CALCULAR
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+        mask_numerico = pd.to_numeric(res_df["% Inclusión"], errors="coerce").notnull()
+        ingredientes_omitidos = res_df.loc[~mask_numerico, "Ingrediente"].tolist()
+        res_df = res_df[mask_numerico]
+        res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
+
+        if ingredientes_omitidos:
+            st.warning(f"Estos ingredientes tienen inclusión fuera de rango o error y fueron omitidos: {', '.join(ingredientes_omitidos)}")
+
         st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
-        # --- EL SIGUIENTE BLOQUE ESTÁ COMENTADO/ELIMINADO ---
-        # if min_inclusion_status:
-        #     st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
-        #     df_min_cumpl = pd.DataFrame(min_inclusion_status)
-        #     st.dataframe(fmt2_df(df_min_cumpl.set_index("Ingrediente")), use_container_width=True)
+
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
