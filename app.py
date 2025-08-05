@@ -326,7 +326,7 @@ with tabs[2]:
     if diet is not None and ingredients_df is not None and not ingredients_df.empty:
         # Si el resultado es fallback, muestra advertencia arriba
         if result.get("fallback", False):
-            st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla."))
+            st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla.")
 
         # Si todos los valores son cero, advertir al usuario
         valores = [safe_float(v) for v in diet.values()]
@@ -369,10 +369,17 @@ with tabs[2]:
         # Botón para reformular dieta con inclusiones fijas
         if st.button("Reformular dieta con inclusiones fijas"):
             inclusiones_a_fijar = {k: v for k, v in inclusiones_fijas.items() if v is not None}
+            nutrientes_dict = {
+                nut: {
+                    "min": req_auto.get(nut, {}).get("min", 0),
+                    "max": req_auto.get(nut, {}).get("max", None)
+                }
+                for nut in nutrientes_seleccionados
+            }
             formulator = DietFormulator(
                 ingredients_df,
                 nutrientes_seleccionados,
-                {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", None)} for nut in nutrientes_seleccionados},
+                nutrientes_dict,
                 limits={"min": {}, "max": {}},
                 ratios=[],
                 min_selected_ingredients={ing: 0.01 for ing in diet},
