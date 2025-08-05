@@ -317,13 +317,13 @@ with tabs[2]:
     nutrientes_seleccionados = st.session_state.get("nutrientes_seleccionados", [])
     req_auto = st.session_state.get("nutrientes_requeridos", {})
     tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+    result = st.session_state.get("last_result", {})
 
-    # Mostrar controles de edición SIEMPRE que haya dieta y matriz
-    if diet and ingredients_df is not None and not ingredients_df.empty:
-        # Si todos los valores son cero, advertir al usuario
-        valores = [safe_float(v) for v in diet.values()]
-        if sum(valores) == 0:
-            st.warning("La mezcla actual tiene 0% de todos los ingredientes. Ajusta los parámetros y reformula.")
+    # SIEMPRE muestra la edición si hay ingredientes y dieta (aunque sea fallback/subóptima)
+    if diet is not None and ingredients_df is not None and not ingredients_df.empty:
+        # Si el resultado es fallback, muestra advertencia
+        if result.get("fallback", False):
+            st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla."))
 
         # Estado para inclusiones fijas
         if "fixed_inclusions" not in st.session_state:
