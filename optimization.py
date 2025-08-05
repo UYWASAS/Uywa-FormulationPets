@@ -47,12 +47,17 @@ class DietFormulator:
         ingredient_vars = {
             i: pulp.LpVariable(f"ing_{i}", 0, 1) for i in self.ingredients_df.index
         }
+        # Slack vars solo para mínimos
+        slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", 0) for nut in self.nutrient_list}
 
-        # Objetivo: minimizar costo
+        # Objetivo: minimizar costo + penalización slacks (penalización estándar)
         total_cost = pulp.lpSum([
             ingredient_vars[i] * safe_float(self.ingredients_df.loc[i, "precio"]) for i in self.ingredients_df.index
         ])
-        prob += total_cost
+        total_slack = pulp.lpSum([
+            1000 * slack_vars_min[nut] for nut in self.nutrient_list
+        ])
+        prob += total_cost + total_slack
 
         # Suma de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1
@@ -74,18 +79,20 @@ class DietFormulator:
                 if not idx.empty:
                     prob += ingredient_vars[idx[0]] == float(val_fijo) / 100
 
-        # RESTRICCIONES DE NUTRIENTES REQUERIDOS (SIN SLACK)
+        # Restricciones de nutrientes requeridos
         for nut in self.nutrient_list:
             if nut in self.ingredients_df.columns:
+                # Mínimo (con slack)
                 req_min = self.requirements.get(nut, {}).get("min", None)
                 if req_min is not None and req_min != "":
                     prob += (
                         pulp.lpSum([
                             ingredient_vars[i] * safe_float(self.ingredients_df.loc[i, nut])
                             for i in self.ingredients_df.index
-                        ])
+                        ]) + slack_vars_min[nut]
                         >= safe_float(req_min)
                     )
+                # Máximo (estricto)
                 req_max = self.requirements.get(nut, {}).get("max", None)
                 if req_max is not None and req_max != "" and str(req_max).lower() != "none":
                     try:
