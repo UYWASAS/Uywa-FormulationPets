@@ -327,7 +327,7 @@ with tabs[2]:
     if diet is not None and ingredients_df is not None and not ingredients_df.empty:
         # Si el resultado es fallback, muestra advertencia arriba
         if result.get("fallback", False):
-            st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla.")
+            st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla."))
 
         # Si todos los valores son cero, advertir al usuario
         valores = [safe_float(v) for v in diet.values()]
