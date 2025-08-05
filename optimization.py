@@ -103,12 +103,14 @@ class DietFormulator:
         min_inclusion_status = []
         nutritional_values = {}
         compliance_data = []
+        total_cost_value = 0
 
         for i in self.ingredients_df.index:
             amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
             ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
             if amount > 0:
                 diet[ingredient_name] = round(amount, 4)
+                total_cost_value += float(self.ingredients_df.loc[i, "precio"]) * (amount / 100) * 100
             if ingredient_name in self.min_selected_ingredients:
                 min_req = self.min_selected_ingredients[ingredient_name]
                 cumple_min = amount >= min_req
@@ -118,6 +120,8 @@ class DietFormulator:
                     "Minimo requerido (%)": min_req,
                     "Cumple mínimo": "✔️" if cumple_min else "❌"
                 })
+
+        total_cost_value = round(total_cost_value, 2)
 
         # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
@@ -163,10 +167,15 @@ class DietFormulator:
         return {
             "success": True,
             "diet": diet,
+            "cost": total_cost_value,  # SIEMPRE presente
             "nutritional_values": nutritional_values,
             "compliance_data": compliance_data,
             "min_inclusion_status": min_inclusion_status,
         }
 
     def solve(self):
-        return self.run()
+        result = self.run()
+        # Garantiza que 'cost' esté presente incluso si el resultado es diferente
+        if "cost" not in result:
+            result["cost"] = 0
+        return result
