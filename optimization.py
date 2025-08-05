@@ -28,15 +28,10 @@ class DietFormulator:
 
     def solve(self):
         prob = pulp.LpProblem("DietFormulation", pulp.LpMinimize)
-
-        # Variables: proporción de cada ingrediente (0-1)
         ingredient_vars = {
             i: pulp.LpVariable(f"ing_{i}", 0, 1) for i in self.ingredients_df.index
         }
-        # Slack vars solo para mínimos
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", 0) for nut in self.nutrient_list}
-
-        # Objetivo: minimizar costo + penalización slacks
         total_cost = pulp.lpSum([
             ingredient_vars[i] * safe_float(self.ingredients_df.loc[i, "precio"]) for i in self.ingredients_df.index
         ])
@@ -44,31 +39,25 @@ class DietFormulator:
             1000 * slack_vars_min[nut] for nut in self.nutrient_list
         ])
         prob += total_cost + total_slack
-
-        # Suma de ingredientes = 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1
 
-        # Restricción: suma de ingredientes proteicos <= máximo permitido (opcional)
         if self.max_proteinas_pct is not None and self.proteinas_indices is not None and len(self.proteinas_indices) > 0:
             prob += pulp.lpSum([ingredient_vars[i] for i in self.proteinas_indices]) <= self.max_proteinas_pct
 
-        # Restricciones de mínimo de inclusión por ingrediente seleccionado
         for ing, min_val in self.min_selected_ingredients.items():
             idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ing].index
             if not idx.empty:
                 prob += ingredient_vars[idx[0]] >= min_val
 
-        # Restricciones de inclusión fija por edición dirigida (reoptimización)
+        # Inclusiones fijas por edición dirigida
         for ing, val_fijo in self.inclusiones_fijas.items():
             if val_fijo is not None:
                 idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ing].index
                 if not idx.empty:
-                    prob += ingredient_vars[idx[0]] == float(val_fijo) / 100  # val_fijo en %, variable en [0,1]
+                    prob += ingredient_vars[idx[0]] == float(val_fijo) / 100
 
-        # Restricciones de nutrientes requeridos
         for nut in self.nutrient_list:
             if nut in self.ingredients_df.columns:
-                # Mínimo (con slack)
                 req_min = self.requirements.get(nut, {}).get("min", None)
                 if req_min is not None and req_min != "":
                     prob += (
@@ -78,7 +67,6 @@ class DietFormulator:
                         ]) + slack_vars_min[nut]
                         >= safe_float(req_min)
                     )
-                # Máximo (estricto)
                 req_max = self.requirements.get(nut, {}).get("max", None)
                 if req_max is not None and req_max != "" and str(req_max).lower() != "none":
                     try:
@@ -93,10 +81,8 @@ class DietFormulator:
                     except Exception:
                         pass
 
-        # Resuelve el modelo
         prob.solve()
 
-        # Recoge mezcla propuesta (aunque no sea óptima)
         diet = {}
         total_cost_val = 0
         nutritional_values = {}
@@ -120,7 +106,6 @@ class DietFormulator:
                 })
         total_cost_val = fmt2(total_cost_val)
 
-        # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
@@ -132,7 +117,6 @@ class DietFormulator:
                     valor_nut += nut_val * (amount / 100)
             nutritional_values[nutrient] = fmt2(valor_nut)
 
-        # Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
@@ -161,7 +145,6 @@ class DietFormulator:
                 "Cumple": estado
             })
 
-        # Éxito si el modelo es óptimo y cumple restricciones
         status = pulp.LpStatus[prob.status]
         success = status == "Optimal" and all(d["Cumple"] == "✔️" for d in compliance_data)
         fallback = not success
@@ -177,8 +160,6 @@ class DietFormulator:
             "message": "Mezcla más cercana posible. No cumple todos los requisitos." if fallback else "",
         }
 
-
-# --- Utilidades ---
 
 def safe_float(val, default=0.0):
     try:
