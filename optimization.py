@@ -1,5 +1,6 @@
 import pulp
 import pandas as pd
+import math
 
 class DietFormulator:
     def __init__(
@@ -76,17 +77,28 @@ class DietFormulator:
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
 
-        # Restricciones de nutrientes requeridos
+        # Restricciones de nutrientes requeridos (corregido: no NaN/infinito)
         for nut in self.nutrient_list:
             req = self.requirements.get(nut, {})
             req_min = req.get("min", None)
             req_max = req.get("max", None)
             if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
+                # Solo agrega si el valor es válido
                 if req_min is not None and str(req_min) != "":
-                    prob += nut_sum + slack_vars_min[nut] >= float(req_min), f"Min_{nut}"
-                if req_max is not None and str(req_max) != "" and float(req_max) > 0:
-                    prob += nut_sum - slack_vars_max[nut] <= float(req_max), f"Max_{nut}"
+                    try:
+                        min_val = float(req_min)
+                        if not math.isnan(min_val) and not math.isinf(min_val):
+                            prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
+                    except Exception:
+                        pass
+                if req_max is not None and str(req_max) != "":
+                    try:
+                        max_val = float(req_max)
+                        if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
+                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
+                    except Exception:
+                        pass
 
         # Función objetivo: minimizar costo + penalización slacks
         total_cost = pulp.lpSum([
@@ -166,13 +178,25 @@ class DietFormulator:
                 "Cumple": estado
             })
 
+        # ---- NUEVO: proporción final por categoría de ingredientes en la dieta ----
+        total_inclusion = sum(diet.values())
+        resumen_cat = []
+        for cat in self.categorias_principales:
+            ing_cat = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize() == cat]
+            pct_cat = sum([diet.get(self.ingredients_df.loc[i, "Ingrediente"], 0) for i in ing_cat])
+            pct_cat = pct_cat / total_inclusion * 100 if total_inclusion > 0 else 0
+            resumen_cat.append({"Categoría": cat, "% en dieta": round(pct_cat, 2)})
+        # Se incluye en el resultado para mostrar en la app
+        resumen_categorias = pd.DataFrame(resumen_cat)
+
         return {
             "success": True,
             "diet": diet,
-            "cost": total_cost_value,  # SIEMPRE presente
+            "cost": total_cost_value,
             "nutritional_values": nutritional_values,
             "compliance_data": compliance_data,
             "min_inclusion_status": min_inclusion_status,
+            "resumen_categorias": resumen_categorias,  # <-- para mostrar en Streamlit
         }
 
     def solve(self):
