@@ -391,10 +391,15 @@ with tabs[2]:
         res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in diet_actual.items()], columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
-        st.subheader("Perfil nutricional recalculado")
-        nutricionales = st.session_state.get("last_nutritional_values", {})
-        nut_df = pd.DataFrame([(nut, fmt2(nutricionales.get(nut, 0))) for nut in nutrientes_seleccionados], columns=["Nutriente", "Obtenido"])
-        st.dataframe(nut_df.set_index("Nutriente"), use_container_width=True)
+        # Tabla completa de cumplimiento nutricional
+        st.subheader("Cumplimiento de perfil nutricional")
+        compliance_data = st.session_state.get("last_result", {}).get("compliance_data", [])
+        if compliance_data:
+            df_compliance = pd.DataFrame(compliance_data)
+            df_compliance = df_compliance.set_index("Nutriente")
+            st.dataframe(df_compliance, use_container_width=True)
+        else:
+            st.info("No hay datos de cumplimiento nutricional aún.")
     else:
         st.warning("No hay fórmula calculada aún. Realiza la formulación en la pestaña anterior.")
         
