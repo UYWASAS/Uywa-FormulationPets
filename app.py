@@ -311,6 +311,7 @@ with tabs[1]:
 with tabs[2]:
     st.header("Editar inclusión y reformular dieta")
 
+    # Recupera variables de sesión necesarias
     diet = st.session_state.get("last_diet", None)
     ingredients_df = st.session_state.get("ingredients_df", None)
     nutritional_values = st.session_state.get("last_nutritional_values", {})
@@ -321,9 +322,14 @@ with tabs[2]:
 
     # SIEMPRE muestra la edición si hay ingredientes y dieta (aunque sea fallback/subóptima)
     if diet is not None and ingredients_df is not None and not ingredients_df.empty:
-        # Si el resultado es fallback, muestra advertencia
+        # Si el resultado es fallback, muestra advertencia arriba
         if result.get("fallback", False):
             st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla."))
+
+        # Si todos los valores son cero, advertir al usuario
+        valores = [safe_float(v) for v in diet.values()]
+        if sum(valores) == 0:
+            st.warning("La mezcla actual tiene 0% de todos los ingredientes. Ajusta los parámetros y reformula.")
 
         # Estado para inclusiones fijas
         if "fixed_inclusions" not in st.session_state:
