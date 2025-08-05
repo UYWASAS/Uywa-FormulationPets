@@ -346,11 +346,16 @@ with tabs[2]:
                 val_actual = safe_float(diet[ing])
                 val_fijo = inclusiones_fijas.get(ing, None)
                 fijo = val_fijo is not None
+                # Limita el valor para evitar el error de Streamlit (si el optimizador devuelve >100 o <0)
+                value_default = float(val_fijo) if fijo else val_actual
+                value_default = max(0.0, min(100.0, value_default))
                 val_nuevo = st.number_input(
                     f"Inclusión {ing} (%)",
-                    min_value=0.0, max_value=100.0,
-                    value=float(val_fijo) if fijo else val_actual,
-                    step=0.1, key=f"incl_{ing}_edit"
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=value_default,
+                    step=0.1,
+                    key=f"incl_{ing}_edit"
                 )
                 if fijo:
                     if st.button(f"Liberar {ing}", key=f"liberar_{ing}"):
