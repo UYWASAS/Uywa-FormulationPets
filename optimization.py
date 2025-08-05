@@ -4,6 +4,12 @@ import math
 from utils import fmt2  # asegúrate que fmt2 está en utils.py
 
 class DietFormulator:
+    MACRO_MIN_NUTRIENTS = [
+        "Proteina", "EM", "Grasa", "Ácido Linoleico", "Ca", "P", "Na", "Cl",
+        "Lisina", "Metionina", "Metionina + Cistina", "Valina", "Triptófano",
+        "Fenilalanina", "Isoleucina", "Treonina", "Arginina", "Leucina"
+    ]
+
     def __init__(
         self,
         ingredients_df,
@@ -16,8 +22,8 @@ class DietFormulator:
         min_selected_ingredients=None,
         diet_type=None,
         min_num_ingredientes=3,
-        min_inclusion_pct=0.01,
-        max_inclusion_pct=0.05,
+        min_inclusion_pct=0.01,  # mínimo 1%
+        max_inclusion_pct=0.05,  # máximo 5%
     ):
         self.ingredients_df = ingredients_df
         self.nutrient_list = nutrient_list
@@ -59,38 +65,56 @@ class DietFormulator:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
                 prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-        # Variables slack para requerimientos nutricionales
+        # Variables slack para requerimientos nutricionales (solo para no-macros/min)
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
 
-        # Restricciones de nutrientes requeridos (corregido: no NaN/infinito)
+        # Restricciones de nutrientes requeridos
         for nut in self.nutrient_list:
             req = self.requirements.get(nut, {})
             req_min = req.get("min", None)
             req_max = req.get("max", None)
             if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
-                if req_min is not None and str(req_min) != "":
-                    try:
-                        min_val = float(req_min)
-                        if not math.isnan(min_val) and not math.isinf(min_val):
-                            prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
-                    except Exception:
-                        pass
-                if req_max is not None and str(req_max) != "":
-                    try:
-                        max_val = float(req_max)
-                        if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
-                    except Exception:
-                        pass
+                # Para los nutrientes especificados, SIEMPRE se fuerza el mínimo
+                if nut in self.MACRO_MIN_NUTRIENTS:
+                    if req_min is not None and str(req_min) != "":
+                        try:
+                            min_val = float(req_min)
+                            if not math.isnan(min_val) and not math.isinf(min_val):
+                                prob += nut_sum >= min_val, f"Min_{nut}"
+                        except Exception:
+                            pass
+                    if req_max is not None and str(req_max) != "":
+                        try:
+                            max_val = float(req_max)
+                            if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
+                                prob += nut_sum <= max_val, f"Max_{nut}"
+                        except Exception:
+                            pass
+                else:
+                    # Para otros nutrientes, se permite slack si no se cumple min
+                    if req_min is not None and str(req_min) != "":
+                        try:
+                            min_val = float(req_min)
+                            if not math.isnan(min_val) and not math.isinf(min_val):
+                                prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
+                        except Exception:
+                            pass
+                    if req_max is not None and str(req_max) != "":
+                        try:
+                            max_val = float(req_max)
+                            if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
+                                prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
+                        except Exception:
+                            pass
 
         # Función objetivo: minimizar costo + penalización slacks
         total_cost = pulp.lpSum([
             ingredient_vars[i] * float(self.ingredients_df.loc[i, "precio"]) for i in self.ingredients_df.index
         ])
         total_slack = pulp.lpSum([
-            1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut] for nut in self.nutrient_list
+            1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut] for nut in self.nutrient_list if nut not in self.MACRO_MIN_NUTRIENTS
         ])
         prob += total_cost + total_slack
 
