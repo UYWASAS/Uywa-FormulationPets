@@ -58,20 +58,20 @@ class DietFormulator:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
                 prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
+        # -- RESTRICCIONES POR TIPO DE DIETA ELIMINADAS --
         # Obtén los índices por categoría para restricciones de tipo de dieta
-        proteicos_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().lower() == "proteinas"]
-        carbo_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().lower() == "carbohidratos"]
+        # proteicos_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().lower() == "proteinas"]
+        # carbo_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().lower() == "carbohidratos"]
 
-        # Restricciones de proporciones mínimas de ingredientes por tipo de dieta
-        if self.diet_type:
-            if self.diet_type == "Alta en proteína":
-                prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.6, "MinProteicos"
-            elif self.diet_type == "Equilibrada":
-                prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.4, "MinProteicos"
-                prob += pulp.lpSum([ingredient_vars[i] for i in carbo_idx]) >= 0.4, "MinCarbohidratos"
-            elif self.diet_type == "Alta en carbohidratos":
-                prob += pulp.lpSum([ingredient_vars[i] for i in carbo_idx]) >= 0.6, "MinCarbohidratos"
-                prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.3, "MinProteicos"
+        # if self.diet_type:
+        #     if self.diet_type == "Alta en proteína":
+        #         prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.6, "MinProteicos"
+        #     elif self.diet_type == "Equilibrada":
+        #         prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.4, "MinProteicos"
+        #         prob += pulp.lpSum([ingredient_vars[i] for i in carbo_idx]) >= 0.4, "MinCarbohidratos"
+        #     elif self.diet_type == "Alta en carbohidratos":
+        #         prob += pulp.lpSum([ingredient_vars[i] for i in carbo_idx]) >= 0.6, "MinCarbohidratos"
+        #         prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= 0.3, "MinProteicos"
 
         # Variables slack para requerimientos nutricionales
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
@@ -186,7 +186,6 @@ class DietFormulator:
             pct_cat = sum([diet.get(self.ingredients_df.loc[i, "Ingrediente"], 0) for i in ing_cat])
             pct_cat = pct_cat / total_inclusion * 100 if total_inclusion > 0 else 0
             resumen_cat.append({"Categoría": cat, "% en dieta": round(pct_cat, 2)})
-        # Se incluye en el resultado para mostrar en la app
         resumen_categorias = pd.DataFrame(resumen_cat)
 
         return {
