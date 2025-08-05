@@ -22,10 +22,11 @@ class DietFormulator:
         min_selected_ingredients=None,
         diet_type=None,
         min_num_ingredientes=3,
-        min_inclusion_pct=0.01,  # mínimo 1%
-        max_inclusion_pct=0.05,  # máximo 5%
+        min_inclusion_pct=0.01,
+        max_inclusion_pct=0.05,
     ):
-        self.ingredients_df = ingredients_df.reset_index(drop=True)  # Asegura índice único
+        # --- Asegura índice único ---
+        self.ingredients_df = ingredients_df.copy().reset_index(drop=True)
         self.nutrient_list = nutrient_list
         self.requirements = requirements
         self.selected_species = selected_species
@@ -49,13 +50,15 @@ class DietFormulator:
 
     def run(self):
         prob = pulp.LpProblem("Diet_Formulation", pulp.LpMinimize)
+        # --- Usa índice único ---
         ingredient_vars = pulp.LpVariable.dicts(
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
-        # 1. Suma de inclusiones = 1 (100%)
+
+        # --- Suma de inclusiones = 1 ---
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # 2. Restricción: Mínimo de inclusión para ingredientes seleccionados
+        # --- Restricción de mínimos y máximos de inclusión ---
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             if ing_name in self.min_selected_ingredients:
@@ -67,13 +70,13 @@ class DietFormulator:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
                 prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-        # 3. Limita ingredientes NO proteína/carbohidrato a máximo 10% de inclusión
+        # --- Limita ingredientes NO proteína/carbohidrato a máximo 10% ---
         for i in self.ingredients_df.index:
             cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
             if cat_val not in ["Proteinas", "Carbohidratos"]:
                 prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
 
-        # 4. Mínimo de inclusión de fuentes proteicas según tipo de dieta
+        # --- Mínimo de inclusión de fuentes proteicas según tipo de dieta ---
         min_proteina = 0.8 if self.diet_type == "Alta en proteína" else \
                        0.5 if self.diet_type == "Equilibrada" else \
                        0.3 if self.diet_type == "Alta en carbohidratos" else 0.0
@@ -82,18 +85,17 @@ class DietFormulator:
         if proteicos_idx and min_proteina > 0:
             prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= min_proteina, "MinProteicosSegunTipo"
 
-        # 5. Variables slack para requerimientos nutricionales (solo para no-macros/min)
+        # --- Variables slack ---
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
 
-        # 6. Restricciones de nutrientes requeridos
+        # --- Restricciones de nutrientes ---
         for nut in self.nutrient_list:
             req = self.requirements.get(nut, {})
             req_min = req.get("min", None)
             req_max = req.get("max", None)
             if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
-                # Para los nutrientes críticos, SIEMPRE se fuerza el mínimo
                 if nut in self.MACRO_MIN_NUTRIENTS:
                     if req_min is not None and str(req_min) != "":
                         try:
@@ -110,7 +112,6 @@ class DietFormulator:
                         except Exception:
                             pass
                 else:
-                    # Para otros nutrientes, se permite slack si no se cumple min
                     if req_min is not None and str(req_min) != "":
                         try:
                             min_val = float(req_min)
@@ -126,7 +127,7 @@ class DietFormulator:
                         except Exception:
                             pass
 
-        # 7. Función objetivo: minimizar costo + penalización slacks
+        # --- Función objetivo ---
         total_cost = pulp.lpSum([
             ingredient_vars[i] * float(self.ingredients_df.loc[i, "precio"]) for i in self.ingredients_df.index
         ])
@@ -135,10 +136,10 @@ class DietFormulator:
         ])
         prob += total_cost + total_slack
 
-        # 8. Resuelve el modelo
+        # --- Resuelve ---
         prob.solve()
 
-        # 9. Recoge resultados
+        # --- Recoge resultados ---
         diet = {}
         min_inclusion_status = []
         nutritional_values = {}
@@ -163,7 +164,6 @@ class DietFormulator:
 
         total_cost_value = float(fmt2(total_cost_value))
 
-        # 10. Composición nutricional obtenida
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
@@ -179,7 +179,6 @@ class DietFormulator:
                     valor_nut += nut_val * amount
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
-        # 11. Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
@@ -204,7 +203,6 @@ class DietFormulator:
                 "Cumple": estado
             })
 
-        # 12. Proporción final por categoría (2 decimales)
         total_inclusion = sum([float(v) for v in diet.values()])
         resumen_cat = []
         for cat in self.categorias_principales:
