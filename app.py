@@ -289,10 +289,11 @@ with tabs[2]:
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
         st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
-        if min_inclusion_status:
-            st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
-            df_min_cumpl = pd.DataFrame(min_inclusion_status)
-            st.dataframe(fmt2_df(df_min_cumpl.set_index("Ingrediente")), use_container_width=True)
+        # --- EL SIGUIENTE BLOQUE ESTÁ COMENTADO/ELIMINADO ---
+        # if min_inclusion_status:
+        #     st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
+        #     df_min_cumpl = pd.DataFrame(min_inclusion_status)
+        #     st.dataframe(fmt2_df(df_min_cumpl.set_index("Ingrediente")), use_container_width=True)
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
