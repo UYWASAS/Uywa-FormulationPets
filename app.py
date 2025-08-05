@@ -272,9 +272,12 @@ with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
 
-    # Mostrar error si el modelo es inviable o hay problemas de mínimos
-    if result is None or not result.get("success", False):
-        st.error(result.get("message", "No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior."))
+    # Control robusto de errores (sin restricciones de proteína por categoría)
+    if result is None:
+        st.error("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
+        st.stop()
+    if not result.get("success", False):
+        st.error(result.get("message", "Hubo un error en la formulación."))
         st.stop()
 
     diet = result.get("diet", {})
@@ -282,10 +285,7 @@ with tabs[2]:
     nutritional_values = result.get("nutritional_values", {})
     min_inclusion_status = result.get("min_inclusion_status", [])
     req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
-    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
-    for nut in ["Proteína", "Carbohidrato"]:
-        if nut in req_auto:
-            del req_auto[nut]
+    # Ya no se elimina ni manipula la proteína por categoría, mostramos todo lo que se calcule en el modelo
     st.subheader("Composición óptima de la dieta (%)")
 
     # FILTRA VALORES NO NUMÉRICOS ANTES DE MOSTRAR Y CALCULAR
