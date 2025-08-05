@@ -292,7 +292,6 @@ with tabs[2]:
         res_df = res_df[mask_numerico]
         res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
 
-        # DEPURACIÓN: muestra suma total en la interfaz
         suma_inclusion = res_df["% Inclusión"].sum()
         st.warning(f"Suma total de inclusión mostrada: {fmt2(suma_inclusion)} %")
         if ingredientes_omitidos:
