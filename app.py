@@ -343,7 +343,7 @@ with tabs[2]:
         if min_inclusion_status:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
-            st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
+            # st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
 
         # --- Apartado 3: Costos ---
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
