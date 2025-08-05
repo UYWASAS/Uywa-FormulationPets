@@ -331,7 +331,7 @@ with tabs[2]:
         if sum(valores) == 0:
             st.warning("La mezcla actual tiene 0% de todos los ingredientes. Ajusta los parámetros y reformula.")
 
-        # Edición directa en tabla
+        # Edición directa en la tabla
         st.subheader("Edita inclusiones en la tabla y reformula")
         diet_actual = st.session_state.get("last_diet", diet)
         df_inclusiones = pd.DataFrame({
@@ -339,6 +339,7 @@ with tabs[2]:
             "% Inclusión": [safe_float(val) for val in diet_actual.values()]
         })
 
+        # Edición con st.data_editor
         df_editado = st.data_editor(
             df_inclusiones,
             column_config={
@@ -351,6 +352,7 @@ with tabs[2]:
         # Suma robusta de la columna '% Inclusión'
         suma_inclusion = sum(pd.to_numeric(df_editado["% Inclusión"], errors="coerce").fillna(0))
 
+        st.write(f"Suma de inclusiones: {suma_inclusion:.2f}%")
         # Validación antes de reformular
         if suma_inclusion > 100:
             st.warning(f"La suma de inclusiones editadas es {suma_inclusion:.2f}%. Ajusta los valores para que no exceda 100%.")
