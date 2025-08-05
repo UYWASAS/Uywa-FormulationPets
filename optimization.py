@@ -53,28 +53,39 @@ class DietFormulator:
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
 
-        # RESTRICCIÓN DE SUMA DE INCLUSIÓN
+        # --------- DEPURACIÓN DE MÍNIMOS DE INCLUSIÓN Y AJUSTE DE LÓGICA ----------
+        # Solo pone mínimo de inclusión a los ingredientes SI el usuario lo pide explícitamente o si es crítico.
+        # Si seleccionas muchos ingredientes, NO impongas mínimo a todos.
+        # Aquí solo pondremos mínimo a los ingredientes en min_selected_ingredients (que debe ser controlado en el frontend).
+
+        suma_minimos = sum([
+            self.min_selected_ingredients.get(self.ingredients_df.loc[i, "Ingrediente"], 0)
+            for i in self.ingredients_df.index
+        ])
+        print(f"Suma de mínimos de inclusión forzados: {suma_minimos}")
+
+        # --------- RESTRICCIÓN DE SUMA ---------
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Restricción de mínimos y máximos de inclusión
+        # --------- RESTRICCIONES INDIVIDUALES ---------
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
-            if ing_name in self.min_selected_ingredients:
-                prob += ingredient_vars[i] >= self.min_inclusion_pct, f"Min1Pct_{ing_name}"
-                prob += ingredient_vars[i] <= self.max_inclusion_pct, f"Max5Pct_{ing_name}"
-            else:
-                max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
-                min_inc = float(self.limits["min"].get(ing_name, 0)) / 100
-                prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
-                prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
+            if ing_name in self.min_selected_ingredients and self.min_selected_ingredients[ing_name] > 0:
+                prob += ingredient_vars[i] >= self.min_selected_ingredients[ing_name], f"MinInc_{ing_name}"
+            # Puedes poner máximos personalizados aquí si lo necesitas, pero no mínimos genéricos a todos
 
-        # Limita ingredientes NO proteína/carbohidrato a máximo 10% de inclusión
+            # Si tienes límites por ingrediente en self.limits, úsalos:
+            max_inc = float(self.limits["max"].get(ing_name, 100)) / 100
+            if max_inc < 1.0:
+                prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
+
+        # --------- RESTRICCIONES POR CATEGORÍA ---------
         for i in self.ingredients_df.index:
             cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
             if cat_val not in ["Proteinas", "Carbohidratos"]:
                 prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
 
-        # Mínimo de inclusión de fuentes proteicas según tipo de dieta
+        # --------- RESTRICCIÓN DE MÍNIMO TOTAL DE PROTEÍNAS SEGÚN TIPO DE DIETA ---------
         min_proteina = 0.8 if self.diet_type == "Alta en proteína" else \
                        0.5 if self.diet_type == "Equilibrada" else \
                        0.3 if self.diet_type == "Alta en carbohidratos" else 0.0
@@ -155,7 +166,6 @@ class DietFormulator:
             amount = ingredient_vars[i].varValue
             inclusion_raw.append(amount if amount is not None else 0)
             ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
-            # Solo agrega si el valor es >0 y menor o igual a 1.01
             if amount is not None and amount > 0 and amount <= 1.01:
                 diet[ingredient_name] = float(fmt2(amount * 100))
                 total_cost_value += float(self.ingredients_df.loc[i, "precio"]) * amount * 100
@@ -201,7 +211,7 @@ class DietFormulator:
                 if obtenido_f < req_min_f:
                     estado = "❌"
                 req_max_f = float(req_max)
-                if req_max_f != 0 and obtenido_f > req_max_f:
+                if max_r_f != 0 and obtenido_f > max_r_f:
                     estado = "❌"
             except (ValueError, TypeError):
                 pass
