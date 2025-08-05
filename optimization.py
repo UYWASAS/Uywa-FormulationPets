@@ -79,20 +79,14 @@ class DietFormulator:
             if max_inc < 1.0:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
 
-        # --------- RESTRICCIONES POR CATEGORÍA ---------
+        # --------- RESTRICCIONES POR CATEGORÍA (excepto proteínas) ---------
         for i in self.ingredients_df.index:
             cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
             if cat_val not in ["Proteinas", "Carbohidratos"]:
                 prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
 
-        # --------- RESTRICCIÓN DE MÍNIMO TOTAL DE PROTEÍNAS SEGÚN TIPO DE DIETA ---------
-        min_proteina = 0.8 if self.diet_type == "Alta en proteína" else \
-                       0.5 if self.diet_type == "Equilibrada" else \
-                       0.3 if self.diet_type == "Alta en carbohidratos" else 0.0
-
-        proteicos_idx = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize() == "Proteinas"]
-        if proteicos_idx and min_proteina > 0:
-            prob += pulp.lpSum([ingredient_vars[i] for i in proteicos_idx]) >= min_proteina, "MinProteicosSegunTipo"
+        # --------- ELIMINADA LA RESTRICCIÓN DE MÍNIMO TOTAL DE PROTEÍNAS SEGÚN TIPO DE DIETA ---------
+        # (Ya no existe el bloque que obligaba mínimo de proteínas por tipo de dieta)
 
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
