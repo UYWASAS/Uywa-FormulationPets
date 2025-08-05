@@ -11,7 +11,7 @@ NUTRIENTES_REFERENCIA_PERRO = {
     "Metionina":        {"min": 0.088, "max": None, "unit": "g/100g"},
     "Metionina + Cistina": {"min": 0.175, "max": None, "unit": "g/100g"},
     "Valina":           {"min": 0.17, "max": None, "unit": "g/100g"},
-    "Triptofano":       {"min": 0.058, "max": None, "unit": "g/100g"},
+    "Triptófano":       {"min": 0.058, "max": None, "unit": "g/100g"},
     "Fenilalanina":     {"min": 0.163, "max": None, "unit": "g/100g"},
     "Isoleucina":       {"min": 0.163, "max": None, "unit": "g/100g"},
     "Treonina":         {"min": 0.203, "max": None, "unit": "g/100g"},
