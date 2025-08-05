@@ -53,8 +53,10 @@ class DietFormulator:
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
 
+        # RESTRICCIÓN DE SUMA DE INCLUSIÓN
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
+        # Restricción de mínimos y máximos de inclusión
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
             if ing_name in self.min_selected_ingredients:
@@ -66,11 +68,13 @@ class DietFormulator:
                 prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
                 prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
+        # Limita ingredientes NO proteína/carbohidrato a máximo 10% de inclusión
         for i in self.ingredients_df.index:
             cat_val = str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize()
             if cat_val not in ["Proteinas", "Carbohidratos"]:
                 prob += ingredient_vars[i] <= 0.10, f"Max10pct_{self.ingredients_df.loc[i, 'Ingrediente']}"
 
+        # Mínimo de inclusión de fuentes proteicas según tipo de dieta
         min_proteina = 0.8 if self.diet_type == "Alta en proteína" else \
                        0.5 if self.diet_type == "Equilibrada" else \
                        0.3 if self.diet_type == "Alta en carbohidratos" else 0.0
@@ -129,6 +133,17 @@ class DietFormulator:
 
         prob.solve()
 
+        # DEPURACIÓN: imprime valores crudos y suma
+        print("===== DEPURACIÓN: VALORES RAW DE INCLUSIÓN =====")
+        suma_raw = 0
+        for i in self.ingredients_df.index:
+            name = self.ingredients_df.loc[i, "Ingrediente"]
+            val = ingredient_vars[i].varValue
+            print(f"{name}: {val}")
+            if val is not None:
+                suma_raw += val
+        print(f"Suma total de inclusión RAW (debería ser 1.0): {suma_raw}")
+
         diet = {}
         min_inclusion_status = []
         nutritional_values = {}
@@ -145,7 +160,6 @@ class DietFormulator:
                 diet[ingredient_name] = float(fmt2(amount * 100))
                 total_cost_value += float(self.ingredients_df.loc[i, "precio"]) * amount * 100
             elif amount is not None and amount > 1.01:
-                # Solo loguea el error, pero NO lo agregues al dict diet
                 print(f"WARNING: {ingredient_name} tiene inclusión fuera de rango: {amount}")
 
             if ingredient_name in self.min_selected_ingredients:
