@@ -312,9 +312,8 @@ with tabs[1]:
 # ======================== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ========================
 
 with tabs[2]:
-    st.header("Editar inclusión y reformular dieta")
+    st.header("Editar inclusiones y reformular dieta")
 
-    # Recupera variables de sesión necesarias
     diet = st.session_state.get("last_diet", None)
     ingredients_df = st.session_state.get("ingredients_df", None)
     nutritional_values = st.session_state.get("last_nutritional_values", {})
@@ -323,53 +322,34 @@ with tabs[2]:
     tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
     result = st.session_state.get("last_result", {})
 
-    # SIEMPRE muestra la edición si hay ingredientes y dieta (aunque sea fallback/subóptima)
     if diet is not None and ingredients_df is not None and not ingredients_df.empty:
-        # Si el resultado es fallback, muestra advertencia arriba
         if result.get("fallback", False):
             st.warning(result.get("message", "La mezcla no cumple todos los requisitos pero puedes editarla."))
 
-        # Si todos los valores son cero, advertir al usuario
         valores = [safe_float(v) for v in diet.values()]
         if sum(valores) == 0:
             st.warning("La mezcla actual tiene 0% de todos los ingredientes. Ajusta los parámetros y reformula.")
 
-        # Estado para inclusiones fijas
-        if "fixed_inclusions" not in st.session_state:
-            st.session_state["fixed_inclusions"] = {ing: None for ing in diet}
+        # Edición directa en la tabla
+        st.subheader("Edita inclusiones en la tabla y reformula")
+        diet_actual = st.session_state.get("last_diet", diet)
+        df_inclusiones = pd.DataFrame({
+            "Ingrediente": list(diet_actual.keys()),
+            "% Inclusión": [safe_float(val) for val in diet_actual.values()]
+        })
 
-        inclusiones_fijas = st.session_state["fixed_inclusions"]
-        st.subheader("Ajusta y fija el % de inclusión de cada ingrediente")
+        df_editado = st.data_editor(
+            df_inclusiones,
+            column_config={
+                "% Inclusión": st.column_config.NumberColumn(min_value=0, max_value=100, step=0.1)
+            },
+            use_container_width=True,
+            key="editor_inclusiones"
+        )
 
-        cols = st.columns(len(diet))
-        for idx, ing in enumerate(diet):
-            with cols[idx]:
-                val_actual = safe_float(diet[ing])
-                val_fijo = inclusiones_fijas.get(ing, None)
-                fijo = val_fijo is not None
-                # Limita el valor para evitar el error de Streamlit (si el optimizador devuelve >100 o <0)
-                value_default = float(val_fijo) if fijo else val_actual
-                value_default = max(0.0, min(100.0, value_default))
-                val_nuevo = st.number_input(
-                    f"Inclusión {ing} (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=value_default,
-                    step=0.1,
-                    key=f"incl_{ing}_edit"
-                )
-                if fijo:
-                    if st.button(f"Liberar {ing}", key=f"liberar_{ing}"):
-                        inclusiones_fijas[ing] = None
-                else:
-                    if st.button(f"Fijar {ing}", key=f"fijar_{ing}"):
-                        inclusiones_fijas[ing] = val_nuevo
-
-        st.session_state["fixed_inclusions"] = inclusiones_fijas
-
-        # Botón para reformular dieta con inclusiones fijas
-        if st.button("Reformular dieta con inclusiones fijas"):
-            inclusiones_a_fijar = {k: v for k, v in inclusiones_fijas.items() if v is not None}
+        if st.button("Reformular dieta con inclusiones editadas"):
+            inclusiones_editadas = dict(zip(df_editado["Ingrediente"], df_editado["% Inclusión"]))
+            inclusiones_a_fijar = {k: v for k, v in inclusiones_editadas.items() if v is not None}
             nutrientes_dict = {
                 nut: {
                     "min": req_auto.get(nut, {}).get("min", 0),
@@ -391,12 +371,11 @@ with tabs[2]:
             st.session_state["last_result"] = result
             st.session_state["last_diet"] = result["diet"]
             st.session_state["last_nutritional_values"] = result["nutritional_values"]
-            st.success("¡Reformulación realizada con inclusiones fijas!")
+            st.success("¡Reformulación realizada con inclusiones editadas!")
 
-        # Visualiza resultado actual
+        # Composición actual (solo visualización)
         st.subheader("Composición actual de la dieta (%)")
-        diet_actual = st.session_state.get("last_diet", diet)
-        res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in diet_actual.items()], columns=["Ingrediente", "% Inclusión"])
+        res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in st.session_state["last_diet"].items()], columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
         # Tabla completa de cumplimiento nutricional
