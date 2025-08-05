@@ -347,7 +347,11 @@ with tabs[2]:
             key="editor_inclusiones"
         )
 
-        if st.button("Reformular dieta con inclusiones editadas"):
+        # Validación robusta de la suma antes de reformular
+        suma_inclusion = sum(pd.to_numeric(df_editado["% Inclusión"], errors="coerce").fillna(0))
+        if suma_inclusion > 100:
+            st.warning(f"La suma de inclusiones editadas es {suma_inclusion:.2f}%. Ajusta los valores para que no exceda 100%.")
+        elif st.button("Reformular dieta con inclusiones editadas"):
             inclusiones_editadas = dict(zip(df_editado["Ingrediente"], df_editado["% Inclusión"]))
             inclusiones_a_fijar = {k: v for k, v in inclusiones_editadas.items() if v is not None}
             nutrientes_dict = {
@@ -375,7 +379,9 @@ with tabs[2]:
 
         # Composición actual (solo visualización)
         st.subheader("Composición actual de la dieta (%)")
-        res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in st.session_state["last_diet"].items()], columns=["Ingrediente", "% Inclusión"])
+        res_df = pd.DataFrame([
+            (ing, fmt2(val)) for ing, val in st.session_state["last_diet"].items()
+        ], columns=["Ingrediente", "% Inclusión"])
         st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
         # Tabla completa de cumplimiento nutricional
@@ -389,6 +395,22 @@ with tabs[2]:
             st.info("No hay datos de cumplimiento nutricional aún.")
     else:
         st.warning("No hay fórmula calculada aún. Realiza la formulación en la pestaña anterior.")
+
+
+def safe_float(val, default=0.0):
+    try:
+        if isinstance(val, str):
+            val = val.replace(",", ".")
+        return float(val)
+    except Exception:
+        return default
+
+def fmt2(x):
+    try:
+        f = float(x)
+        return f"{f:,.2f}"
+    except Exception:
+        return x
         
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
