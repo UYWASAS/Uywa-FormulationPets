@@ -309,30 +309,37 @@ with tabs[1]:
 
 # =========== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ===========
 with tabs[2]:
-    st.header("Edición y reoptimización dirigida de ingredientes")
+    st.header("Editar inclusión y reformular dieta")
 
     diet = st.session_state.get("last_diet", None)
     ingredients_df = st.session_state.get("ingredients_df", None)
     nutritional_values = st.session_state.get("last_nutritional_values", {})
     nutrientes_seleccionados = st.session_state.get("nutrientes_seleccionados", [])
+    req_auto = st.session_state.get("nutrientes_requeridos", {})
+    tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+
+    # Elimina cualquier tabla de mínimos/cumplimiento previa de tu app
 
     if diet and ingredients_df is not None and not ingredients_df.empty:
-        # Dict de inclusiones fijas
+        # Estado para inclusiones fijas
         if "fixed_inclusions" not in st.session_state:
-            st.session_state["fixed_inclusions"] = {ing: None for ing in diet}  # None: libre, valor: fijo
+            st.session_state["fixed_inclusions"] = {ing: None for ing in diet}
 
-        st.subheader("Fija la inclusión (%) de los ingredientes")
         inclusiones_fijas = st.session_state["fixed_inclusions"]
+        st.subheader("Ajusta y fija el % de inclusión de cada ingrediente")
 
-        # Visualización y edición
-        for ing in diet:
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                val_actual = diet[ing]
+        cols = st.columns(len(diet))
+        for idx, ing in enumerate(diet):
+            with cols[idx]:
+                val_actual = float(diet[ing])
                 val_fijo = inclusiones_fijas.get(ing, None)
                 fijo = val_fijo is not None
-                val_nuevo = st.number_input(f"Inclusión {ing} (%)", min_value=0.0, max_value=100.0, value=float(val_fijo) if fijo else float(val_actual), step=0.1, key=f"incl_{ing}")
-            with col2:
+                val_nuevo = st.number_input(
+                    f"Inclusión {ing} (%)",
+                    min_value=0.0, max_value=100.0,
+                    value=float(val_fijo) if fijo else val_actual,
+                    step=0.1, key=f"incl_{ing}_edit"
+                )
                 if fijo:
                     if st.button(f"Liberar {ing}", key=f"liberar_{ing}"):
                         inclusiones_fijas[ing] = None
@@ -342,29 +349,37 @@ with tabs[2]:
 
         st.session_state["fixed_inclusions"] = inclusiones_fijas
 
-        # Reformula automáticamente (o muestra botón si prefieres)
+        # Botón para reformular dieta con inclusiones fijas
         if st.button("Reformular dieta con inclusiones fijas"):
             # Solo fija los ingredientes con valor distinto de None
             inclusiones_a_fijar = {k: v for k, v in inclusiones_fijas.items() if v is not None}
+            # Puedes ajustar los params según tu flujo
             formulator = DietFormulator(
                 ingredients_df,
                 nutrientes_seleccionados,
-                {nut: {"min": ..., "max": ...} for nut in nutrientes_seleccionados},  # completa con tus requerimientos
+                {nut: {"min": req_auto[nut].get("min", 0), "max": req_auto[nut].get("max", None)} for nut in nutrientes_seleccionados},
                 limits={"min": {}, "max": {}},
                 ratios=[],
                 min_selected_ingredients={ing: 0.01 for ing in diet},
-                diet_type="Equilibrada",  # o el tipo que uses
-                inclusiones_fijas=inclusiones_a_fijar  # nuevo parámetro
+                diet_type=tipo_dieta,
+                inclusiones_fijas=inclusiones_a_fijar
             )
             result = formulator.solve()
-            # Actualiza el estado con los nuevos resultados
             st.session_state["last_result"] = result
             st.session_state["last_diet"] = result["diet"]
             st.session_state["last_nutritional_values"] = result["nutritional_values"]
             st.success("¡Reformulación realizada con inclusiones fijas!")
 
-        # Visualiza resultados como antes...
+        # Visualiza resultado actual
+        st.subheader("Composición actual de la dieta (%)")
+        diet_actual = st.session_state.get("last_diet", diet)
+        res_df = pd.DataFrame([(ing, fmt2(val)) for ing, val in diet_actual.items()], columns=["Ingrediente", "% Inclusión"])
+        st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
+        st.subheader("Perfil nutricional recalculado")
+        nutricionales = st.session_state.get("last_nutritional_values", {})
+        nut_df = pd.DataFrame([(nut, fmt2(nutricionales.get(nut, 0))) for nut in nutrientes_seleccionados], columns=["Nutriente", "Obtenido"])
+        st.dataframe(nut_df.set_index("Nutriente"), use_container_width=True)
     else:
         st.warning("No hay fórmula calculada aún. Realiza la formulación en la pestaña anterior.")
         
