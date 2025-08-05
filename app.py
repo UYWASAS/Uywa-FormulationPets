@@ -310,6 +310,7 @@ with tabs[1]:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
 # ======================== BLOQUE DE RESULTADOS (with tabs[2]: Resultados) ========================
+import pandas as pd
 
 with tabs[2]:
     st.header("Editar inclusiones y reformular dieta")
@@ -330,7 +331,7 @@ with tabs[2]:
         if sum(valores) == 0:
             st.warning("La mezcla actual tiene 0% de todos los ingredientes. Ajusta los parámetros y reformula.")
 
-        # Edición directa en la tabla
+        # Edición directa en tabla
         st.subheader("Edita inclusiones en la tabla y reformula")
         diet_actual = st.session_state.get("last_diet", diet)
         df_inclusiones = pd.DataFrame({
@@ -347,8 +348,10 @@ with tabs[2]:
             key="editor_inclusiones"
         )
 
-        # Validación robusta de la suma antes de reformular
+        # Suma robusta de la columna '% Inclusión'
         suma_inclusion = sum(pd.to_numeric(df_editado["% Inclusión"], errors="coerce").fillna(0))
+
+        # Validación antes de reformular
         if suma_inclusion > 100:
             st.warning(f"La suma de inclusiones editadas es {suma_inclusion:.2f}%. Ajusta los valores para que no exceda 100%.")
         elif st.button("Reformular dieta con inclusiones editadas"):
