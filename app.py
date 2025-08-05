@@ -272,7 +272,7 @@ with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
 
-    # Control robusto de errores (sin restricciones de proteína por categoría)
+    # Control robusto de errores
     if result is None:
         st.error("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
         st.stop()
@@ -285,15 +285,15 @@ with tabs[2]:
     nutritional_values = result.get("nutritional_values", {})
     min_inclusion_status = result.get("min_inclusion_status", [])
     req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
-    # Ya no se elimina ni manipula la proteína por categoría, mostramos todo lo que se calcule en el modelo
+
     st.subheader("Composición óptima de la dieta (%)")
 
-    # FILTRA VALORES NO NUMÉRICOS ANTES DE MOSTRAR Y CALCULAR
+    # MOSTRAR LOS VALORES COMO PORCENTAJE, EL MODELO ENTREGA PROPORCIÓN (0-1)
     res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
     mask_numerico = pd.to_numeric(res_df["% Inclusión"], errors="coerce").notnull()
     ingredientes_omitidos = res_df.loc[~mask_numerico, "Ingrediente"].tolist()
     res_df = res_df[mask_numerico]
-    res_df["% Inclusión"] = res_df["% Inclusión"].astype(float)
+    res_df["% Inclusión"] = res_df["% Inclusión"].astype(float) * 100
 
     suma_inclusion = res_df["% Inclusión"].sum()
     st.warning(f"Suma total de inclusión mostrada: {suma_inclusion:.2f} %")
@@ -307,6 +307,7 @@ with tabs[2]:
     precio_ton = precio_kg * 1000
     st.metric(label="Precio por kg de dieta", value=f"${precio_kg:.2f}")
     st.metric(label="Precio por tonelada de dieta", value=f"${precio_ton:.2f}")
+
     st.subheader("Composición nutricional y cumplimiento")
     comp_list = []
     for nut, req in req_auto.items():
