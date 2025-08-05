@@ -17,7 +17,6 @@ NUTRIENTES_REFERENCIA_PERRO = {
     "Treonina":         {"min": 0.203, "max": None, "unit": "g/100g"},
     "Arginina":         {"min": 0.204, "max": None, "unit": "g/100g"},
     "Leucina":          {"min": 0.323, "max": None, "unit": "g/100g"},
-    "Ca:P (relación)":  {"min": "1/1", "max": "1.6/1", "unit": "-"},
     "Vitamina A":       {"min": 1250, "max": None, "unit": "mil UI/kg"},
     "Vitamina D3":      {"min": 138, "max": None, "unit": "mil UI/kg"},
     "Vitamina E2":      {"min": 12.5, "max": None, "unit": "mg/kg"},
