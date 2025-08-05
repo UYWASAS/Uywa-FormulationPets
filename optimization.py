@@ -146,18 +146,25 @@ class DietFormulator:
         compliance_data = []
         total_cost_value = 0
 
+        # CORRECCIÓN: solo multiplica por 100 para mostrar y asegura que los valores están en [0, 1]
+        inclusion_raw = []
         for i in self.ingredients_df.index:
             amount = ingredient_vars[i].varValue
+            inclusion_raw.append(amount if amount is not None else 0)
             ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
-            if amount is not None and amount > 0:
+            # Solo agrega si el valor es >0 y menor o igual a 1
+            if amount is not None and amount > 0 and amount <= 1.01:
                 diet[ingredient_name] = float(fmt2(amount * 100))  # % inclusión
                 total_cost_value += float(self.ingredients_df.loc[i, "precio"]) * amount * 100
+            elif amount is not None and amount > 1.01:
+                # Si el valor es mayor a 1, lo reportamos como error en el dict
+                diet[ingredient_name] = f"ERROR: {amount}"
             if ingredient_name in self.min_selected_ingredients:
                 min_req = self.min_selected_ingredients[ingredient_name]
-                cumple_min = (amount * 100) >= min_req
+                cumple_min = (amount * 100) >= min_req if amount is not None else False
                 min_inclusion_status.append({
                     "Ingrediente": ingredient_name,
-                    "Incluido (%)": fmt2(amount * 100),
+                    "Incluido (%)": fmt2(amount * 100 if amount is not None else 0),
                     "Minimo requerido (%)": fmt2(min_req),
                     "Cumple mínimo": "✔️" if cumple_min else "❌"
                 })
@@ -176,7 +183,7 @@ class DietFormulator:
                         nut_val = 0.0
                     if pd.isna(nut_val):
                         nut_val = 0.0
-                    valor_nut += nut_val * amount
+                    valor_nut += nut_val * (amount if amount is not None else 0)
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
         for nutrient in self.nutrient_list:
@@ -203,16 +210,18 @@ class DietFormulator:
                 "Cumple": estado
             })
 
-        total_inclusion = sum([float(v) for v in diet.values()])
+        total_inclusion = sum([float(v) for v in inclusion_raw if v is not None])
+        # Si la suma no es 1, lo reportamos en el resumen
         resumen_cat = []
         for cat in self.categorias_principales:
             ing_cat = [i for i in self.ingredients_df.index if str(self.ingredients_df.loc[i, "Categoría"]).strip().capitalize() == cat]
-            pct_cat = sum([diet.get(self.ingredients_df.loc[i, "Ingrediente"], 0) for i in ing_cat])
-            pct_cat = (pct_cat / total_inclusion * 100) if total_inclusion > 0 else 0
+            pct_cat = sum([float(fmt2(ingredient_vars[i].varValue * 100)) if ingredient_vars[i].varValue is not None and ingredient_vars[i].varValue <= 1.01 else 0 for i in ing_cat])
+            pct_cat = (pct_cat / (total_inclusion * 100) * 100) if total_inclusion > 0 else 0
             resumen_cat.append({"Categoría": cat, "% en dieta": fmt2(pct_cat)})
         resumen_categorias = pd.DataFrame(resumen_cat)
 
-        return {
+        # Reporta la suma total como mensaje extra
+        result_dict = {
             "success": True,
             "diet": diet,
             "cost": total_cost_value,
@@ -220,7 +229,12 @@ class DietFormulator:
             "compliance_data": compliance_data,
             "min_inclusion_status": min_inclusion_status,
             "resumen_categorias": resumen_categorias,
+            "total_inclusion_raw": total_inclusion
         }
+        if abs(total_inclusion - 1) > 0.01:
+            result_dict["message"] = f"ATENCIÓN: la suma de inclusiones es {fmt2(total_inclusion * 100)}% (debería ser 100%). Revise restricciones."
+
+        return result_dict
 
     def solve(self):
         result = self.run()
