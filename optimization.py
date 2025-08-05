@@ -27,6 +27,22 @@ class DietFormulator:
         self.inclusiones_fijas = inclusiones_fijas or {}
 
     def solve(self):
+        # Validación previa: suma de inclusiones fijas no debe superar 100%
+        suma_fijas = sum([float(v) for v in self.inclusiones_fijas.values() if v is not None])
+        if suma_fijas > 100:
+            return {
+                "success": False,
+                "fallback": True,
+                "diet": {},
+                "cost": 0,
+                "nutritional_values": {},
+                "compliance_data": [],
+                "min_inclusion_status": [],
+                "message": f"ERROR: La suma de inclusiones fijas es {suma_fijas:.2f}%. Ajusta los valores y vuelve a intentar.",
+            }
+        # Si suma_fijas == 100, el modelo se reduce a solo inclusiones fijas
+        use_only_fijas = abs(suma_fijas - 100) < 0.0001
+
         prob = pulp.LpProblem("DietFormulation", pulp.LpMinimize)
 
         # Variables: proporción de cada ingrediente (0-1)
@@ -92,6 +108,17 @@ class DietFormulator:
                             )
                     except Exception:
                         pass
+
+        # Si son solo inclusiones fijas, fuerza solución directa
+        if use_only_fijas:
+            for i in self.ingredients_df.index:
+                ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
+                if ingredient_name in self.inclusiones_fijas and self.inclusiones_fijas[ingredient_name] is not None:
+                    ingredient_vars[i].setInitialValue(float(self.inclusiones_fijas[ingredient_name]) / 100)
+                    ingredient_vars[i].fixValue()
+                else:
+                    ingredient_vars[i].setInitialValue(0)
+                    ingredient_vars[i].fixValue()
 
         # Resuelve el modelo
         prob.solve()
@@ -166,6 +193,12 @@ class DietFormulator:
         status = pulp.LpStatus[prob.status]
         success = status == "Optimal" and all(d["Cumple"] == "✔️" for d in compliance_data)
         fallback = not success
+
+        # Si la suma de inclusiones no es 100% (por error numérico), normaliza proporciones antes de mostrar
+        suma_actual = sum([safe_float(v) for v in diet.values()])
+        if suma_actual > 0 and abs(suma_actual - 100) > 0.05:
+            for k in diet.keys():
+                diet[k] = fmt2(safe_float(diet[k]) * 100 / suma_actual)
 
         return {
             "success": success,
