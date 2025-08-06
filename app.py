@@ -10,9 +10,9 @@ from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
 from diet_profiles import DIET_CATEGORY_RANGES
-from utils import fmt2, fmt2_df  # <-- USAR DESDE TU ARCHIVO DE UTILIDADES
+from utils import fmt2, fmt2_df
 
-# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL SIN FOTO/NOMBRE MASCOTA ========================
+# ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL ========================
 st.set_page_config(page_title="Formulador UYWA Premium", layout="wide")
 st.markdown("""
     <style>
@@ -39,7 +39,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ======================== BLOQUE 3: LOGIN CON ARCHIVO AUTH.PY ROBUSTO ========================
+# ======================== BLOQUE 3: LOGIN CON ARCHIVO AUTH.PY ========================
 from auth import USERS_DB
 
 def login():
@@ -217,12 +217,18 @@ with tabs[0]:
     user_requirements = {}
     for _, row in df_nutr_editable.iterrows():
         nut = row["Nutriente"]
-        min_val = row["Min"]
-        max_val = row["Max"]
+        try:
+            min_val = float(row["Min"]) if row["Min"] not in ["", None, "None"] else 0.0
+        except Exception:
+            min_val = 0.0
+        try:
+            max_val = float(row["Max"]) if row["Max"] not in ["", None, "None"] else 0.0
+        except Exception:
+            max_val = 0.0
         unidad = row["Unidad"]
         user_requirements[nut] = {
-            "min": min_val if min_val != "" else None,
-            "max": max_val if max_val != "" else None,
+            "min": min_val,
+            "max": max_val,
             "unit": unidad
         }
     st.session_state["nutrientes_requeridos"] = user_requirements
@@ -235,7 +241,6 @@ with tabs[1]:
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # ---------- BLOQUE 6.1: TIPO DE DIETA Y LÍMITES DE CATEGORÍA ----------
     tipo_dieta = st.selectbox(
         "Tipo de dieta objetivo",
         list(DIET_CATEGORY_RANGES.keys()),
@@ -262,10 +267,9 @@ with tabs[1]:
         suma_max = sum([v[1] for v in user_category_ranges.values()])
         st.info(f"Suma de mínimos: {suma_min*100:.2f}%. Suma de máximos: {suma_max*100:.2f}%.")
 
-    # ---------- BLOQUE 6.2: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"], key="uploader_ingredientes")
     ingredientes_df = load_ingredients(ingredientes_file)
-    formulable = False  # SIEMPRE definir antes de usar
+    formulable = False
 
     if ingredientes_df is not None and not ingredientes_df.empty:
         for col in ingredientes_df.columns:
@@ -300,17 +304,15 @@ with tabs[1]:
         st.write(f"Ingredientes seleccionados: {', '.join(ingredientes_sel) if ingredientes_sel else 'Ninguno'}")
         formulable = not ingredientes_df_filtrado.empty
 
-    # ---------- BLOQUE 6.3: FORMULAR DIETA ----------
     if formulable:
         if st.button("Formular dieta automática", key="btn_formular_dieta_auto"):
-            # Usa directamente los requerimientos guardados desde el perfil de mascota (no editable aquí)
             user_requirements = st.session_state.get("nutrientes_requeridos", {})
             nutrientes_seleccionados = list(user_requirements.keys())
             min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
             formulator = DietFormulator(
                 ingredientes_df_filtrado,
                 nutrientes_seleccionados,
-                user_requirements,  # <-- USAR LOS LÍMITES EDITADOS DESDE EL PERFIL DE MASCOTA
+                user_requirements,
                 limits={"min": {}, "max": {}},
                 ratios=[],
                 min_selected_ingredients=min_selected_ingredients,
@@ -325,12 +327,13 @@ with tabs[1]:
                 st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
                 st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
                 st.session_state["ingredients_df"] = ingredientes_df_filtrado
+                st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                 st.success("¡Formulación realizada!")
             else:
                 st.error(result.get("message", "No se pudo formular la dieta."))
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
-        
+
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA (editable y reoptimizador) =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
@@ -355,7 +358,6 @@ with tabs[2]:
         st.metric(label="Precio por kg de dieta", value=f"${fmt2(precio_kg)}")
         st.metric(label="Precio por tonelada de dieta", value=f"${fmt2(precio_ton)}")
 
-        # --- NUEVO: TABLA EDITABLE DE CUMPLIMIENTO ---
         st.subheader("Composición nutricional y cumplimiento (editable)")
         req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
         comp_list = []
@@ -374,7 +376,7 @@ with tabs[2]:
             try:
                 max_r_f = float(max_r)
                 obtenido_f = float(obtenido)
-                if max_r_f != 0 and obtenido_f > max_r_f:
+                if max_r_f > 0 and obtenido_f > max_r_f:
                     cumple = "❌"
             except (ValueError, TypeError):
                 pass
@@ -388,7 +390,6 @@ with tabs[2]:
             })
         comp_df = pd.DataFrame(comp_list)
 
-        # Tabla editable (solo columnas Min y Max)
         editable_cols = {
             "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
             "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
@@ -403,23 +404,26 @@ with tabs[2]:
             key="editor_cumplimiento_nutricional"
         )
 
-        # Botón para reoptimizar usando nuevos límites editados
         if st.button("Reoptimizar fórmula", key="btn_reoptimizar"):
-            # Actualizar requerimientos con los nuevos valores editados
             new_requirements = {}
             for _, row in comp_df_editable.iterrows():
                 nut = row["Nutriente"]
-                min_val = row["Min"]
-                max_val = row["Max"]
+                try:
+                    min_val = float(row["Min"]) if row["Min"] not in ["", None, "None"] else 0.0
+                except Exception:
+                    min_val = 0.0
+                try:
+                    max_val = float(row["Max"]) if row["Max"] not in ["", None, "None"] else 0.0
+                except Exception:
+                    max_val = 0.0
                 unidad = row["Unidad"]
                 new_requirements[nut] = {
-                    "min": min_val if min_val != "" else None,
-                    "max": max_val if max_val != "" else None,
+                    "min": min_val,
+                    "max": max_val,
                     "unit": unidad
                 }
             st.session_state["nutrientes_requeridos"] = new_requirements
 
-            # Reoptimizar con los parámetros anteriores
             ingredientes_sel = list(diet.keys())
             if ingredientes_df_filtrado is not None and not ingredientes_df_filtrado.empty:
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
@@ -442,13 +446,15 @@ with tabs[2]:
                     st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
                     st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
                     st.session_state["ingredients_df"] = ingredientes_df_filtrado
+                    st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                     st.success("¡Re-optimización realizada!")
                 else:
-                    st.error(result.get("message", "No se pudo re-optimizar la dieta."))
+                    st.error(result.get("message", "No se pudo re-optimizar la dieta.")
 
+                    )
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
-
+        
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
 # --- Formato decimales ---
