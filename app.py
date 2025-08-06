@@ -390,7 +390,7 @@ with tabs[2]:
                     st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                     st.success("¡Reoptimización realizada con los porcentajes fijados!")
                 else:
-                    st.error(result.get("message", "No se pudo reoptimizar la dieta.")
+                   st.error(result.get("message", "No se pudo reoptimizar la dieta."))
         
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
