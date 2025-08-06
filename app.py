@@ -9,7 +9,6 @@ from profile import load_profile, save_profile, update_mascota_en_perfil
 from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
-from diet_profiles import DIET_CATEGORY_RANGES
 from utils import fmt2, fmt2_df
 
 # ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL ========================
