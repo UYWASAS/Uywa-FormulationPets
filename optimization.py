@@ -95,6 +95,7 @@ class DietFormulator:
             indices = self.categorias_indices.get(cat, [])
             if not indices:
                 continue
+            # Fuerza el mínimo y máximo de la categoría
             prob += pulp.lpSum([ingredient_vars[i] for i in indices]) >= min_range, f"MinCat_{cat}"
             prob += pulp.lpSum([ingredient_vars[i] for i in indices]) <= max_range, f"MaxCat_{cat}"
 
@@ -148,7 +149,7 @@ class DietFormulator:
         diet = {}
         min_inclusion_status = []
         nutritional_values = {}
-        compliance_data = []
+        compliance_data = {}
 
         # Recolecta proporciones y normaliza si es necesario
         ingredient_amounts = {}
@@ -159,7 +160,6 @@ class DietFormulator:
                 ingredient_amounts[ingredient_name] = var_val
 
         total = sum(ingredient_amounts.values())
-        # Normaliza si la suma difiere de 1 por tolerancia numérica
         if abs(total - 1) > 1e-5 and total > 0:
             for k in ingredient_amounts:
                 ingredient_amounts[k] /= total
@@ -198,6 +198,7 @@ class DietFormulator:
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
         # Cumplimiento de requerimientos
+        compliance_data = []
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
@@ -222,6 +223,19 @@ class DietFormulator:
                 "Cumple": estado
             })
 
+        # CALCULA COSTO DE REFERENCIA
+        total_cost_value = 0
+        for ingredient_name, frac in ingredient_amounts.items():
+            idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ingredient_name].index[0]
+            precio = self.ingredients_df.loc[idx, "precio"] if "precio" in self.ingredients_df.columns else 0
+            try:
+                precio = float(precio)
+            except Exception:
+                precio = 0.0
+            total_cost_value += precio * frac
+        total_cost_value = float(fmt2(total_cost_value * 100))  # por 100 kg
+
+        # Resumen de categorías
         total_inclusion = sum([float(v) for v in diet.values()])
         resumen_cat = []
         for cat in self.categorias_principales:
@@ -240,12 +254,19 @@ class DietFormulator:
             "nutritional_values": nutritional_values,
             "compliance_data": compliance_data,
             "min_inclusion_status": min_inclusion_status,
+            "cost": total_cost_value,
             "resumen_categorias": resumen_categorias,
         }
 
     def run(self):
         prob, ingredient_vars = self._build_problem()
         prob.solve()
+        # Chequeo de solución óptima
+        if pulp.LpStatus[prob.status] != "Optimal":
+            return {
+                "success": False,
+                "message": f"No se pudo encontrar una solución óptima. Estado del solver: {pulp.LpStatus[prob.status]}"
+            }
         return self._collect_results(ingredient_vars)
 
     def solve(self):
