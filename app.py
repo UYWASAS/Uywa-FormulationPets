@@ -9,6 +9,7 @@ from profile import load_profile, save_profile, update_mascota_en_perfil
 from ui import show_mascota_form
 from energy_requirements import calcular_mer, descripcion_condiciones
 from nutrient_reference import NUTRIENTES_REFERENCIA_PERRO
+from diet_profiles import DIET_CATEGORY_RANGES
 from utils import fmt2, fmt2_df  # <-- USAR DESDE TU ARCHIVO DE UTILIDADES
 
 # ======================== BLOQUE 2: ESTILO Y LOGO Y BARRA LATERAL SIN FOTO/NOMBRE MASCOTA ========================
@@ -200,7 +201,12 @@ with tabs[1]:
     nombre_mascota = mascota.get("nombre", "Mascota")
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
-    tipo_dieta = st.selectbox("Tipo de dieta objetivo", ["Alta en proteína", "Equilibrada", "Alta en carbohidratos"], index=1, key="tipo_dieta_sel")
+    tipo_dieta = st.selectbox(
+        "Tipo de dieta objetivo", 
+        ["Alta en proteína", "Equilibrada", "Alta en carbohidratos"], 
+        index=1, 
+        key="tipo_dieta_sel"
+    )
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
     ingredientes_df = load_ingredients(ingredientes_file)
     if ingredientes_df is not None and not ingredientes_df.empty:
@@ -238,6 +244,8 @@ with tabs[1]:
                         del req_auto[nut]
                 nutrientes_seleccionados = list(req_auto.keys())
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
+                # Selecciona los rangos de categorías según el tipo de dieta
+                category_ranges = DIET_CATEGORY_RANGES.get(tipo_dieta, DIET_CATEGORY_RANGES["Equilibrada"])
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
@@ -245,7 +253,8 @@ with tabs[1]:
                     limits={"min": {}, "max": {}},
                     ratios=[],
                     min_selected_ingredients=min_selected_ingredients,
-                    diet_type=tipo_dieta
+                    diet_type=tipo_dieta,
+                    category_ranges=category_ranges
                 )
                 result = formulator.solve()
                 st.session_state["last_result"] = result
