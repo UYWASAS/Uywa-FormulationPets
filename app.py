@@ -240,7 +240,7 @@ with tabs[1]:
         "Tipo de dieta objetivo",
         list(DIET_CATEGORY_RANGES.keys()),
         index=1,
-        key="tipo_dieta_sel"
+        key="selectbox_tipo_dieta"
     )
     category_ranges_default = DIET_CATEGORY_RANGES.get(tipo_dieta, DIET_CATEGORY_RANGES[list(DIET_CATEGORY_RANGES.keys())[0]])
 
@@ -251,11 +251,11 @@ with tabs[1]:
             col1, col2 = st.columns(2)
             with col1:
                 min_user = st.number_input(
-                    f"Mínimo {cat} (%)", min_value=0.0, max_value=100.0, value=float(min_val*100), step=0.01, key=f"min_{cat}"
+                    f"Mínimo {cat} (%)", min_value=0.0, max_value=100.0, value=float(min_val*100), step=0.01, key=f"min_cat_{cat}"
                 )
             with col2:
                 max_user = st.number_input(
-                    f"Máximo {cat} (%)", min_value=min_user, max_value=100.0, value=float(max_val*100), step=0.01, key=f"max_{cat}"
+                    f"Máximo {cat} (%)", min_value=min_user, max_value=100.0, value=float(max_val*100), step=0.01, key=f"max_cat_{cat}"
                 )
             user_category_ranges[cat] = (min_user/100, max_user/100)
         suma_min = sum([v[0] for v in user_category_ranges.values()])
@@ -263,9 +263,10 @@ with tabs[1]:
         st.info(f"Suma de mínimos: {suma_min*100:.2f}%. Suma de máximos: {suma_max*100:.2f}%.")
 
     # ---------- BLOQUE 6.2: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
-    ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
+    ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"], key="uploader_ingredientes")
     ingredientes_df = load_ingredients(ingredientes_file)
-    formulable = False  # <-- SIEMPRE definir antes de usar
+    formulable = False  # SIEMPRE definir antes de usar
+
     if ingredientes_df is not None and not ingredientes_df.empty:
         for col in ingredientes_df.columns:
             if col not in ["Ingrediente", "Categoría"]:
@@ -278,7 +279,12 @@ with tabs[1]:
             if not df_cat.empty:
                 st.markdown(f"**{cat}**")
                 ing_cat = df_cat["Ingrediente"].tolist()
-                sel_cat = st.multiselect(f"Selecciona ingredientes de {cat}", ing_cat, default=[], key=f"select_{cat}")
+                sel_cat = st.multiselect(
+                    f"Selecciona ingredientes de {cat}",
+                    ing_cat,
+                    default=[],
+                    key=f"multiselect_{cat}"
+                )
                 ingredientes_seleccionados.extend(sel_cat)
         ingredientes_sel = list(dict.fromkeys(ingredientes_seleccionados))
         ingredientes_df_filtrado = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
@@ -296,7 +302,7 @@ with tabs[1]:
 
     # ---------- BLOQUE 6.3: FORMULAR DIETA ----------
     if formulable:
-        if st.button("Formular dieta automática"):
+        if st.button("Formular dieta automática", key="btn_formular_dieta_auto"):
             # Usa directamente los requerimientos guardados desde el perfil de mascota (no editable aquí)
             user_requirements = st.session_state.get("nutrientes_requeridos", {})
             nutrientes_seleccionados = list(user_requirements.keys())
@@ -325,35 +331,6 @@ with tabs[1]:
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
         
-    # ---------- BLOQUE 6.4: FORMULAR DIETA ----------
-    if formulable:
-        if st.button("Formular dieta automática"):
-            nutrientes_seleccionados = list(user_requirements.keys())
-            min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
-            formulator = DietFormulator(
-                ingredientes_df_filtrado,
-                nutrientes_seleccionados,
-                user_requirements,  # <-- USAR LOS LÍMITES EDITADOS POR EL USUARIO
-                limits={"min": {}, "max": {}},
-                ratios=[],
-                min_selected_ingredients=min_selected_ingredients,
-                diet_type=tipo_dieta,
-                category_ranges=user_category_ranges
-            )
-            result = formulator.solve()
-            st.session_state["last_result"] = result
-            if result.get("success", False):
-                st.session_state["last_diet"] = result.get("diet", {})
-                st.session_state["last_cost"] = result.get("cost", 0)
-                st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
-                st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
-                st.session_state["ingredients_df"] = ingredientes_df_filtrado
-                st.success("¡Formulación realizada!")
-            else:
-                st.error(result.get("message", "No se pudo formular la dieta."))
-    else:
-        st.info("Selecciona al menos un ingrediente para formular la mezcla.")
-            
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
