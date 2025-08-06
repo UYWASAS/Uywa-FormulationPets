@@ -57,10 +57,9 @@ class DietFormulator:
         }
 
     def _add_ingredient_inclusion_constraints(self, prob, ingredient_vars):
-        # ¡NO AGREGAMOS RESTRICCIONES DURAS! Solo las del usuario en limits explícitos
+        # Solo límites explícitos del usuario en limits, por defecto [0,1]
         for i in self.ingredients_df.index:
             ing_name = self.ingredients_df.loc[i, "Ingrediente"]
-            # Si el usuario puso un mínimo/máximo explícito en limits, lo respetamos, sino [0,1]
             max_inc = float(self.limits["max"].get(ing_name, 1.0))
             min_inc = float(self.limits["min"].get(ing_name, 0.0))
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
@@ -73,7 +72,6 @@ class DietFormulator:
                 req = self.requirements.get(nut, {})
                 req_min = req.get("min", None)
                 req_max = req.get("max", None)
-                # Blandas
                 if req_min is not None and str(req_min) != "":
                     try:
                         min_val = float(req_min)
@@ -89,14 +87,16 @@ class DietFormulator:
                     except Exception:
                         pass
 
-    def _add_category_constraints(self, prob, ingredient_vars, cat_slack_min, cat_slack_max):
+    def _add_category_constraints(self, prob, ingredient_vars, cat_slack_min):
         for cat, (min_range, max_range) in self.category_ranges.items():
             indices = self.categorias_indices.get(cat, [])
             if not indices:
                 continue
             cat_sum = pulp.lpSum([ingredient_vars[i] for i in indices])
+            # Mínimo blando (penalizado)
             prob += cat_sum + cat_slack_min[cat] >= min_range, f"MinCat_{cat}"
-            prob += cat_sum - cat_slack_max[cat] <= max_range, f"MaxCat_{cat}"
+            # Máximo duro (obligatorio)
+            prob += cat_sum <= max_range, f"MaxCat_{cat}_HARD"
 
     def _add_other_nutrient_constraints(self, prob, ingredient_vars, slack_vars_min, slack_vars_max):
         for nut in self.nutrient_list:
@@ -105,7 +105,6 @@ class DietFormulator:
                 req = self.requirements.get(nut, {})
                 req_min = req.get("min", None)
                 req_max = req.get("max", None)
-                # Blandas
                 if req_min is not None and str(req_min) != "":
                     try:
                         min_val = float(req_min)
@@ -129,9 +128,8 @@ class DietFormulator:
         # ÚNICA RESTRICCIÓN DURA: suma = 1
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Variables de holgura para restricciones blandas de categorías
+        # Slack para mínimos de categorías (máximos son duros)
         cat_slack_min = {cat: pulp.LpVariable(f"cat_slack_min_{cat}", lowBound=0, cat="Continuous") for cat in self.category_ranges}
-        cat_slack_max = {cat: pulp.LpVariable(f"cat_slack_max_{cat}", lowBound=0, cat="Continuous") for cat in self.category_ranges}
 
         # Slacks para nutrientes
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
@@ -139,26 +137,25 @@ class DietFormulator:
 
         self._add_ingredient_inclusion_constraints(prob, ingredient_vars)
         self._add_macronutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
-        self._add_category_constraints(prob, ingredient_vars, cat_slack_min, cat_slack_max)
+        self._add_category_constraints(prob, ingredient_vars, cat_slack_min)
         self._add_other_nutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
 
-        # Penaliza TODAS las violaciones
+        # Penaliza solo las violaciones de mínimo de categoría y los slacks de nutrientes
         total_slack = (
             pulp.lpSum([1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut] for nut in self.nutrient_list]) +
-            pulp.lpSum([1000 * cat_slack_min[cat] + 1000 * cat_slack_max[cat] for cat in self.category_ranges])
+            pulp.lpSum([1000 * cat_slack_min[cat] for cat in self.category_ranges])
         )
         prob += total_slack
 
-        return prob, ingredient_vars, cat_slack_min, cat_slack_max
+        return prob, ingredient_vars, cat_slack_min
 
-    def _collect_results(self, ingredient_vars, cat_slack_min, cat_slack_max):
+    def _collect_results(self, ingredient_vars, cat_slack_min):
         diet = {}
         min_inclusion_status = []
         nutritional_values = {}
         compliance_data = []
         cat_violations = {}
 
-        # Recolecta proporciones y normaliza si es necesario
         ingredient_amounts = {}
         for i in self.ingredients_df.index:
             var_val = ingredient_vars[i].varValue
@@ -171,11 +168,9 @@ class DietFormulator:
             for k in ingredient_amounts:
                 ingredient_amounts[k] /= total
 
-        # Resultados en porcentaje
         for ingredient_name, frac in ingredient_amounts.items():
             diet[ingredient_name] = float(fmt2(frac * 100))
 
-        # Estado de mínimos (informativo, ya no forzado)
         for ingredient_name in self.min_selected_ingredients:
             amount = diet.get(ingredient_name, 0)
             min_req = self.min_selected_ingredients[ingredient_name] * 100
@@ -187,7 +182,6 @@ class DietFormulator:
                 "Cumple mínimo": "✔️" if cumple_min else "❌"
             })
 
-        # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
@@ -204,7 +198,6 @@ class DietFormulator:
                     valor_nut += nut_val * frac
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
-        # Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
@@ -229,7 +222,6 @@ class DietFormulator:
                 "Cumple": estado
             })
 
-        # CALCULA COSTO DE REFERENCIA
         total_cost_value = 0
         for ingredient_name, frac in ingredient_amounts.items():
             idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ingredient_name].index[0]
@@ -241,7 +233,6 @@ class DietFormulator:
             total_cost_value += precio * frac
         total_cost_value = float(fmt2(total_cost_value * 100))  # por 100 kg
 
-        # Resumen de categorías
         total_inclusion = sum([float(v) for v in diet.values()])
         resumen_cat = []
         for cat in self.categorias_principales:
@@ -254,13 +245,10 @@ class DietFormulator:
             resumen_cat.append({"Categoría": cat, "% en dieta": fmt2(pct_cat)})
         resumen_categorias = pd.DataFrame(resumen_cat)
 
-        # Violaciones de restricciones de categorías (en %)
         for cat in self.category_ranges:
             min_violation = cat_slack_min[cat].varValue if cat_slack_min[cat].varValue else 0
-            max_violation = cat_slack_max[cat].varValue if cat_slack_max[cat].varValue else 0
             cat_violations[cat] = {
-                "Violación mínimo (%)": fmt2(min_violation * 100),
-                "Violación máximo (%)": fmt2(max_violation * 100)
+                "Violación mínimo (%)": fmt2(min_violation * 100)
             }
 
         return {
@@ -275,15 +263,14 @@ class DietFormulator:
         }
 
     def run(self):
-        prob, ingredient_vars, cat_slack_min, cat_slack_max = self._build_problem()
+        prob, ingredient_vars, cat_slack_min = self._build_problem()
         prob.solve()
         if pulp.LpStatus[prob.status] not in ["Optimal", "Not Solved"]:
-            # ¡Ya no debería pasar salvo que no haya ingredientes!
             return {
                 "success": False,
                 "message": f"No se pudo encontrar una solución. Estado del solver: {pulp.LpStatus[prob.status]}"
             }
-        return self._collect_results(ingredient_vars, cat_slack_min, cat_slack_max)
+        return self._collect_results(ingredient_vars, cat_slack_min)
 
     def solve(self):
         result = self.run()
