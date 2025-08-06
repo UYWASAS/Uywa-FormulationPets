@@ -255,7 +255,6 @@ with tabs[1]:
                 ingredientes_df[col] = pd.to_numeric(ingredientes_df[col], errors='coerce').fillna(0)
         st.subheader("Selecciona las materias primas para formular la dieta por categoría")
 
-        # USAR SIEMPRE LA LISTA FIJA DE CATEGORÍAS
         categorias = ["Proteinas", "Carbohidratos", "Grasas", "Vegetales", "Frutas", "Otros"]
         ingredientes_seleccionados = []
         for cat in categorias:
