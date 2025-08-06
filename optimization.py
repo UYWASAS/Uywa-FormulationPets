@@ -72,6 +72,7 @@ class DietFormulator:
                 req = self.requirements.get(nut, {})
                 req_min = req.get("min", None)
                 req_max = req.get("max", None)
+                # Mínimo blando (slack penalizado)
                 if req_min is not None and str(req_min) != "":
                     try:
                         min_val = float(req_min)
@@ -79,11 +80,12 @@ class DietFormulator:
                             prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
                     except Exception:
                         pass
+                # Máximo duro (solo si > 0)
                 if req_max is not None and str(req_max) != "":
                     try:
                         max_val = float(req_max)
                         if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
+                            prob += nut_sum <= max_val, f"Max_{nut}"
                     except Exception:
                         pass
 
@@ -105,6 +107,7 @@ class DietFormulator:
                 req = self.requirements.get(nut, {})
                 req_min = req.get("min", None)
                 req_max = req.get("max", None)
+                # Mínimo blando (slack penalizado)
                 if req_min is not None and str(req_min) != "":
                     try:
                         min_val = float(req_min)
@@ -112,11 +115,12 @@ class DietFormulator:
                             prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
                     except Exception:
                         pass
+                # Máximo duro (solo si > 0)
                 if req_max is not None and str(req_max) != "":
                     try:
                         max_val = float(req_max)
                         if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
+                            prob += nut_sum <= max_val, f"Max_{nut}"
                     except Exception:
                         pass
 
@@ -153,7 +157,7 @@ class DietFormulator:
         diet = {}
         min_inclusion_status = []
         nutritional_values = {}
-        compliance_data = []
+        compliance_data = {}
         cat_violations = {}
 
         ingredient_amounts = {}
@@ -214,13 +218,13 @@ class DietFormulator:
                     estado = "❌"
             except (ValueError, TypeError):
                 pass
-            compliance_data.append({
-                "Nutriente": nutrient,
-                "Mínimo": fmt2(req_min),
-                "Máximo": fmt2(req_max),
-                "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
-                "Cumple": estado
-            })
+            if nutrient not in compliance_data:
+                compliance_data[nutrient] = {}
+            compliance_data[nutrient]["Nutriente"] = nutrient
+            compliance_data[nutrient]["Mínimo"] = fmt2(req_min)
+            compliance_data[nutrient]["Máximo"] = fmt2(req_max)
+            compliance_data[nutrient]["Obtenido"] = fmt2(obtenido) if obtenido is not None and obtenido != "" else ""
+            compliance_data[nutrient]["Cumple"] = estado
 
         total_cost_value = 0
         for ingredient_name, frac in ingredient_amounts.items():
