@@ -328,9 +328,22 @@ with tabs[2]:
         nutritional_values = result.get("nutritional_values", {})
         min_inclusion_status = result.get("min_inclusion_status", [])
         ingredientes_df_filtrado = st.session_state.get("ingredients_df", None)
+        # Toma los ingredientes seleccionados por el usuario siempre:
+        ingredientes_sel = []
+        if ingredientes_df_filtrado is not None and "Ingrediente" in ingredientes_df_filtrado.columns:
+            ingredientes_sel = list(ingredientes_df_filtrado["Ingrediente"])
+        else:
+            ingredientes_sel = list(diet.keys())
 
         st.subheader("Composición óptima de la dieta (%)")
-        res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
+        # Construye tabla con todos los seleccionados, aunque estén en 0:
+        comp_data = []
+        for ing in ingredientes_sel:
+            comp_data.append({
+                "Ingrediente": ing,
+                "% Inclusión": diet.get(ing, 0.0)
+            })
+        res_df = pd.DataFrame(comp_data)
         st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
 
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
@@ -347,7 +360,7 @@ with tabs[2]:
         editable_df = st.data_editor(
             editable_df,
             column_config={
-                "% Inclusión": st.column_config.NumberColumn("Porcentaje de Inclusión", min_value=0.01, max_value=100.0, step=0.01)
+                "% Inclusión": st.column_config.NumberColumn("Porcentaje de Inclusión", min_value=0.0, max_value=100.0, step=0.01)
             },
             use_container_width=True,
             key="editor_inclusion_usuario"
@@ -390,7 +403,9 @@ with tabs[2]:
                     st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                     st.success("¡Reoptimización realizada con los porcentajes fijados!")
                 else:
-                   st.error(result.get("message", "No se pudo reoptimizar la dieta."))
+                    st.error(result.get("message", "No se pudo reoptimizar la dieta."))
+
+        # ... resto igual ...
         
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
