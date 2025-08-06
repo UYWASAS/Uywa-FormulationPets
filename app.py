@@ -202,11 +202,33 @@ with tabs[1]:
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
     tipo_dieta = st.selectbox(
-        "Tipo de dieta objetivo", 
-        ["Alta en proteína", "Equilibrada", "Alta en carbohidratos"], 
-        index=1, 
+        "Tipo de dieta objetivo",
+        ["Alta en proteína", "Equilibrada", "Alta en carbohidratos"],
+        index=1,
         key="tipo_dieta_sel"
     )
+
+    # === Visualizador y editor de límites de categorías ===
+    category_ranges_default = DIET_CATEGORY_RANGES.get(tipo_dieta, DIET_CATEGORY_RANGES["Equilibrada"])
+    with st.expander("Límites de proporción por categoría (puedes ajustar antes de formular)", expanded=False):
+        st.write("Define los mínimos y máximos (%) para cada categoría. La suma de mínimos debe ser <= 100 y la de máximos >= 100.")
+        user_category_ranges = {}
+        for cat, (min_val, max_val) in category_ranges_default.items():
+            col1, col2 = st.columns(2)
+            with col1:
+                min_user = st.number_input(
+                    f"Mínimo {cat} (%)", min_value=0.0, max_value=100.0, value=float(min_val*100), step=0.01, key=f"min_{cat}"
+                )
+            with col2:
+                max_user = st.number_input(
+                    f"Máximo {cat} (%)", min_value=min_user, max_value=100.0, value=float(max_val*100), step=0.01, key=f"max_{cat}"
+                )
+            user_category_ranges[cat] = (min_user/100, max_user/100)
+        suma_min = sum([v[0] for v in user_category_ranges.values()])
+        suma_max = sum([v[1] for v in user_category_ranges.values()])
+        st.info(f"Suma de mínimos: {suma_min*100:.2f}%. Suma de máximos: {suma_max*100:.2f}%.")
+
+    # === Selección y edición de ingredientes ===
     ingredientes_file = st.file_uploader("Matriz de ingredientes (.csv o .xlsx)", type=["csv", "xlsx"])
     ingredientes_df = load_ingredients(ingredientes_file)
     if ingredientes_df is not None and not ingredientes_df.empty:
@@ -244,8 +266,7 @@ with tabs[1]:
                         del req_auto[nut]
                 nutrientes_seleccionados = list(req_auto.keys())
                 min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
-                # Selecciona los rangos de categorías según el tipo de dieta
-                category_ranges = DIET_CATEGORY_RANGES.get(tipo_dieta, DIET_CATEGORY_RANGES["Equilibrada"])
+
                 formulator = DietFormulator(
                     ingredientes_df_filtrado,
                     nutrientes_seleccionados,
@@ -254,7 +275,7 @@ with tabs[1]:
                     ratios=[],
                     min_selected_ingredients=min_selected_ingredients,
                     diet_type=tipo_dieta,
-                    category_ranges=category_ranges
+                    category_ranges=user_category_ranges
                 )
                 result = formulator.solve()
                 st.session_state["last_result"] = result
@@ -269,7 +290,6 @@ with tabs[1]:
                     st.error(result.get("message", "No se pudo formular la dieta."))
         else:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
-
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
