@@ -284,6 +284,7 @@ with tabs[1]:
                     st.error(result.get("message", "No se pudo formular la dieta."))
         else:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
+            
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
