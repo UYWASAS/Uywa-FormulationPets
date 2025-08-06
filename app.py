@@ -130,7 +130,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla editable) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -146,11 +146,17 @@ with tabs[0]:
     else:
         st.warning("No se pudo calcular el requerimiento energético.")
 
-    st.markdown(f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b> (ajustados a {fmt2(energia)} kcal/kg)", unsafe_allow_html=True)
+    st.markdown(
+        f"#### Requerimientos diarios de nutrientes para <b>{nombre_mascota}</b> (ajustados a {fmt2(energia)} kcal/kg)",
+        unsafe_allow_html=True
+    )
+
+    # Generar DataFrame de requerimientos ajustados
     def ajustar_nutriente(val_ref, energia_ref, energia_actual):
         if val_ref is None:
             return None
         return val_ref * energia_actual / energia_ref
+
     energia_ref = 1000
     requerimientos_ajustados = []
     for nutr, info in NUTRIENTES_REFERENCIA_PERRO.items():
@@ -188,34 +194,37 @@ with tabs[0]:
                 "Unidad": unidad
             })
     df_nutr = pd.DataFrame(requerimientos_ajustados)
-    st.dataframe(fmt2_df(df_nutr), use_container_width=True, hide_index=True)
 
-    # ============= BLOQUE DE EDICIÓN DE REQUERIMIENTOS (editable en este tab) =============
-    st.markdown("#### Edita los límites de requerimientos nutricionales para esta mascota")
+    # Normaliza None y texto "None" a ""
+    df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
+    df_nutr["Max"] = df_nutr["Max"].replace("None", "").replace({None: ""})
+
+    # TABLA EDITABLE (sin pestañas, sin expander)
+    editable_cols = {
+        "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
+        "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
+    }
+    df_nutr_editable = st.data_editor(
+        df_nutr,
+        column_config=editable_cols,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        key="tabla_editable_nutrientes"
+    )
+
+    # Guarda los valores editados en el estado de sesión
     user_requirements = {}
-    with st.expander("Editar límites mínimos y máximos de cada nutriente", expanded=True):
-        for idx, row in df_nutr.iterrows():
-            nut = row["Nutriente"]
-            unidad = row["Unidad"]
-            col1, col2, col3 = st.columns([4, 4, 2])
-            with col1:
-                min_val = st.number_input(
-                    f"Mínimo {nut} ({unidad})", 
-                    value=safe_float(row["Min"]), 
-                    step=0.01, 
-                    format="%.3f",
-                    key=f"edit_min_{nut}"
-                )
-            with col2:
-                max_val = st.number_input(
-                    f"Máximo {nut} ({unidad})", 
-                    value=safe_float(row["Max"]), 
-                    step=0.01, 
-                    format="%.3f",
-                    key=f"edit_max_{nut}"
-                )
-            user_requirements[nut] = {"min": min_val, "max": max_val, "unit": unidad}
-    # Guardar en sesión para acceso en otros tabs
+    for _, row in df_nutr_editable.iterrows():
+        nut = row["Nutriente"]
+        min_val = row["Min"]
+        max_val = row["Max"]
+        unidad = row["Unidad"]
+        user_requirements[nut] = {
+            "min": min_val if min_val != "" else None,
+            "max": max_val if max_val != "" else None,
+            "unit": unidad
+        }
     st.session_state["nutrientes_requeridos"] = user_requirements
 
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
