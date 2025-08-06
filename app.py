@@ -189,10 +189,34 @@ with tabs[0]:
             })
     df_nutr = pd.DataFrame(requerimientos_ajustados)
     st.dataframe(fmt2_df(df_nutr), use_container_width=True, hide_index=True)
-    st.session_state["nutrientes_requeridos"] = {
-        row["Nutriente"]: {"min": row["Min"], "max": row["Max"], "unit": row["Unidad"]}
-        for _, row in df_nutr.iterrows()
-    }
+
+    # ============= BLOQUE DE EDICIÓN DE REQUERIMIENTOS (editable en este tab) =============
+    st.markdown("#### Edita los límites de requerimientos nutricionales para esta mascota")
+    user_requirements = {}
+    with st.expander("Editar límites mínimos y máximos de cada nutriente", expanded=True):
+        for idx, row in df_nutr.iterrows():
+            nut = row["Nutriente"]
+            unidad = row["Unidad"]
+            col1, col2, col3 = st.columns([4, 4, 2])
+            with col1:
+                min_val = st.number_input(
+                    f"Mínimo {nut} ({unidad})", 
+                    value=safe_float(row["Min"]), 
+                    step=0.01, 
+                    format="%.3f",
+                    key=f"edit_min_{nut}"
+                )
+            with col2:
+                max_val = st.number_input(
+                    f"Máximo {nut} ({unidad})", 
+                    value=safe_float(row["Max"]), 
+                    step=0.01, 
+                    format="%.3f",
+                    key=f"edit_max_{nut}"
+                )
+            user_requirements[nut] = {"min": min_val, "max": max_val, "unit": unidad}
+    # Guardar en sesión para acceso en otros tabs
+    st.session_state["nutrientes_requeridos"] = user_requirements
 
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
