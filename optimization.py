@@ -1,8 +1,7 @@
 import pulp
 import pandas as pd
 import math
-from utils import fmt2  # asegúrate que fmt2 está en utils.py
-
+from utils import fmt2
 
 class DietFormulator:
     MACRO_MIN_NUTRIENTS = [
@@ -51,12 +50,10 @@ class DietFormulator:
                     if cat_val == cat:
                         self.categorias_indices[cat].append(i)
 
-        # Ejemplo de rangos de categorías si no se proveen (puedes modificar estos valores)
         self.category_ranges = category_ranges or {
-            "Proteinas": (0.15, 0.40),       # entre 15% y 40%
-            "Carbohidratos": (0.10, 0.40),   # entre 10% y 40%
-            "Grasas": (0.05, 0.20),          # entre 5% y 20%
-            # "Vegetales": (0.00, 0.20),     # puedes agregar/quitar categorías según tus necesidades
+            "Proteinas": (0.20, 0.35),
+            "Carbohidratos": (0.20, 0.40),
+            "Grasas": (0.10, 0.18),
         }
 
     def _add_ingredient_inclusion_constraints(self, prob, ingredient_vars):
@@ -94,10 +91,6 @@ class DietFormulator:
                         pass
 
     def _add_category_constraints(self, prob, ingredient_vars):
-        """
-        Añade restricciones para que la proporción de cada categoría esté dentro del rango deseado.
-        Los rangos están definidos en self.category_ranges como (min, max), proporciones entre 0 y 1.
-        """
         for cat, (min_range, max_range) in self.category_ranges.items():
             indices = self.categorias_indices.get(cat, [])
             if not indices:
@@ -112,7 +105,6 @@ class DietFormulator:
             req_max = req.get("max", None)
             if nut in self.ingredients_df.columns and nut not in self.MACRO_MIN_NUTRIENTS:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
-                # Para otros nutrientes, se permite slack penalizado
                 if req_min is not None and str(req_min) != "":
                     try:
                         min_val = float(req_min)
@@ -134,24 +126,16 @@ class DietFormulator:
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
 
-        # La suma de los ingredientes debe ser 1 (100%)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
 
-        # Restricciones de inclusión mínima/máxima por ingrediente
         self._add_ingredient_inclusion_constraints(prob, ingredient_vars)
-
-        # Restricción de macronutrientes (mínimos/máximos estrictos)
         self._add_macronutrient_constraints(prob, ingredient_vars)
-
-        # Restricciones de proporciones por categoría
         self._add_category_constraints(prob, ingredient_vars)
 
-        # Variables slack para nutrientes secundarios
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         self._add_other_nutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
 
-        # Función objetivo: minimizar solo penalización de slacks
         total_slack = pulp.lpSum([
             1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut]
             for nut in self.nutrient_list if nut not in self.MACRO_MIN_NUTRIENTS
@@ -180,7 +164,6 @@ class DietFormulator:
                     "Cumple mínimo": "✔️" if cumple_min else "❌"
                 })
 
-        # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
@@ -196,7 +179,6 @@ class DietFormulator:
                     valor_nut += nut_val * (amount / 100)
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
-        # Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
@@ -221,7 +203,6 @@ class DietFormulator:
                 "Cumple": estado
             })
 
-        # Proporción final por categoría (2 decimales)
         total_inclusion = sum([float(v) for v in diet.values()])
         resumen_cat = []
         for cat in self.categorias_principales:
