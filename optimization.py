@@ -24,7 +24,7 @@ class DietFormulator:
         min_num_ingredientes: int = 3,
         min_inclusion_pct: float = 0.01,
         max_inclusion_pct: float = 0.05,
-        category_ranges: dict = None,  # NUEVO: rango de cada categoría
+        category_ranges: dict = None,
     ):
         self.ingredients_df = ingredients_df
         self.nutrient_list = nutrient_list
@@ -149,26 +149,44 @@ class DietFormulator:
         min_inclusion_status = []
         nutritional_values = {}
         compliance_data = []
-        for i in self.ingredients_df.index:
-            amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
-            ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
-            if amount > 0:
-                diet[ingredient_name] = float(fmt2(amount))
-            if ingredient_name in self.min_selected_ingredients:
-                min_req = self.min_selected_ingredients[ingredient_name]
-                cumple_min = amount >= min_req
-                min_inclusion_status.append({
-                    "Ingrediente": ingredient_name,
-                    "Incluido (%)": fmt2(amount),
-                    "Minimo requerido (%)": fmt2(min_req),
-                    "Cumple mínimo": "✔️" if cumple_min else "❌"
-                })
 
+        # Recolecta proporciones y normaliza si es necesario
+        ingredient_amounts = {}
+        for i in self.ingredients_df.index:
+            var_val = ingredient_vars[i].varValue
+            ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
+            if var_val is not None and var_val > 1e-7:
+                ingredient_amounts[ingredient_name] = var_val
+
+        total = sum(ingredient_amounts.values())
+        # Normaliza si la suma difiere de 1 por tolerancia numérica
+        if abs(total - 1) > 1e-5 and total > 0:
+            for k in ingredient_amounts:
+                ingredient_amounts[k] /= total
+
+        # Muestra resultados en porcentaje
+        for ingredient_name, frac in ingredient_amounts.items():
+            diet[ingredient_name] = float(fmt2(frac * 100))
+
+        # Estado de mínimos
+        for ingredient_name in self.min_selected_ingredients:
+            amount = diet.get(ingredient_name, 0)
+            min_req = self.min_selected_ingredients[ingredient_name] * 100
+            cumple_min = amount >= min_req
+            min_inclusion_status.append({
+                "Ingrediente": ingredient_name,
+                "Incluido (%)": fmt2(amount),
+                "Minimo requerido (%)": fmt2(min_req),
+                "Cumple mínimo": "✔️" if cumple_min else "❌"
+            })
+
+        # Composición nutricional obtenida
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
                 for i in self.ingredients_df.index:
-                    amount = ingredient_vars[i].varValue * 100 if ingredient_vars[i].varValue is not None else 0
+                    ingredient_name = self.ingredients_df.loc[i, "Ingrediente"]
+                    frac = ingredient_amounts.get(ingredient_name, 0)
                     nut_val = self.ingredients_df.loc[i, nutrient]
                     try:
                         nut_val = float(nut_val)
@@ -176,9 +194,10 @@ class DietFormulator:
                         nut_val = 0.0
                     if pd.isna(nut_val):
                         nut_val = 0.0
-                    valor_nut += nut_val * (amount / 100)
+                    valor_nut += nut_val * frac
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
+        # Cumplimiento de requerimientos
         for nutrient in self.nutrient_list:
             req = self.requirements.get(nutrient, {})
             req_min = req.get("min", "")
