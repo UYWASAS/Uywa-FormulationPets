@@ -331,7 +331,7 @@ with tabs[1]:
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
         
-# ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
+# ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA (editable y reoptimizador) =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
@@ -342,25 +342,22 @@ with tabs[2]:
         total_cost = result.get("cost", 0)
         nutritional_values = result.get("nutritional_values", {})
         min_inclusion_status = result.get("min_inclusion_status", [])
-        req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
+        ingredientes_df_filtrado = st.session_state.get("ingredients_df", None)
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
-        for nut in ["Proteína", "Carbohidrato"]:
-            if nut in req_auto:
-                del req_auto[nut]
+
         st.subheader("Composición óptima de la dieta (%)")
         res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
         st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
-        # --- EL SIGUIENTE BLOQUE ESTÁ COMENTADO/ELIMINADO ---
-        # if min_inclusion_status:
-        #     st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
-        #     df_min_cumpl = pd.DataFrame(min_inclusion_status)
-        #     st.dataframe(fmt2_df(df_min_cumpl.set_index("Ingrediente")), use_container_width=True)
+
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
         precio_kg = total_cost / 100 if total_cost else 0
         precio_ton = precio_kg * 1000
         st.metric(label="Precio por kg de dieta", value=f"${fmt2(precio_kg)}")
         st.metric(label="Precio por tonelada de dieta", value=f"${fmt2(precio_ton)}")
-        st.subheader("Composición nutricional y cumplimiento")
+
+        # --- NUEVO: TABLA EDITABLE DE CUMPLIMIENTO ---
+        st.subheader("Composición nutricional y cumplimiento (editable)")
+        req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
         comp_list = []
         for nut, req in req_auto.items():
             min_r = req.get("min", "")
@@ -383,13 +380,72 @@ with tabs[2]:
                 pass
             comp_list.append({
                 "Nutriente": nut,
-                "Mínimo": fmt2(min_r),
-                "Máximo": fmt2(max_r),
+                "Min": min_r,
+                "Max": max_r,
                 "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
+                "Unidad": req.get("unit", ""),
                 "Cumple": cumple
             })
         comp_df = pd.DataFrame(comp_list)
-        st.dataframe(comp_df, use_container_width=True)
+
+        # Tabla editable (solo columnas Min y Max)
+        editable_cols = {
+            "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
+            "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
+        }
+        comp_df_editable = st.data_editor(
+            comp_df,
+            column_config=editable_cols,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            disabled=["Nutriente", "Obtenido", "Unidad", "Cumple"],
+            key="editor_cumplimiento_nutricional"
+        )
+
+        # Botón para reoptimizar usando nuevos límites editados
+        if st.button("Reoptimizar fórmula", key="btn_reoptimizar"):
+            # Actualizar requerimientos con los nuevos valores editados
+            new_requirements = {}
+            for _, row in comp_df_editable.iterrows():
+                nut = row["Nutriente"]
+                min_val = row["Min"]
+                max_val = row["Max"]
+                unidad = row["Unidad"]
+                new_requirements[nut] = {
+                    "min": min_val if min_val != "" else None,
+                    "max": max_val if max_val != "" else None,
+                    "unit": unidad
+                }
+            st.session_state["nutrientes_requeridos"] = new_requirements
+
+            # Reoptimizar con los parámetros anteriores
+            ingredientes_sel = list(diet.keys())
+            if ingredientes_df_filtrado is not None and not ingredientes_df_filtrado.empty:
+                min_selected_ingredients = {ing: 0.01 for ing in ingredientes_sel}
+                nutrientes_seleccionados = list(new_requirements.keys())
+                formulator = DietFormulator(
+                    ingredientes_df_filtrado,
+                    nutrientes_seleccionados,
+                    new_requirements,
+                    limits={"min": {}, "max": {}},
+                    ratios=[],
+                    min_selected_ingredients=min_selected_ingredients,
+                    diet_type=tipo_dieta,
+                    category_ranges=st.session_state.get("user_category_ranges", {})
+                )
+                result = formulator.solve()
+                st.session_state["last_result"] = result
+                if result.get("success", False):
+                    st.session_state["last_diet"] = result.get("diet", {})
+                    st.session_state["last_cost"] = result.get("cost", 0)
+                    st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
+                    st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
+                    st.session_state["ingredients_df"] = ingredientes_df_filtrado
+                    st.success("¡Re-optimización realizada!")
+                else:
+                    st.error(result.get("message", "No se pudo re-optimizar la dieta."))
+
     else:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
 
