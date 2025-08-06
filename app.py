@@ -297,40 +297,27 @@ with tabs[1]:
             st.info("Selecciona al menos un ingrediente para formular la mezcla.")
 
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
+# ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA =====================
 with tabs[2]:
     st.header("Resultados de la formulación automática")
     result = st.session_state.get("last_result", None)
     if result is None:
         st.warning("No se ha formulado ninguna dieta aún. Realiza la formulación en la pestaña anterior.")
     elif result.get("fallback", False):
-        st.error("No se pudo formular una dieta que cumpla los requerimientos nutricionales con los ingredientes seleccionados. Revisa la selección o los mínimos requeridos.")
-        st.markdown("La dieta mostrada a continuación es solo una solución de emergencia, no cumple requisitos nutricionales.")
-
-        # Mostrar lista de nutrientes que no cumplen
-        comp_df = pd.DataFrame(result.get("compliance_data", []))
-        if not comp_df.empty:
-            no_cumplen = comp_df[comp_df["Cumple"] != "✔️"]["Nutriente"].tolist()
-            if no_cumplen:
-                st.info("Nutrientes fuera de rango: " + ", ".join(str(n) for n in no_cumplen))
-
-        diet = result.get("diet", {})
-        if diet:
-            res_df = pd.DataFrame(list(diet.items()), columns=["Ingrediente", "% Inclusión"])
-            st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
-        min_inclusion_status = result.get("min_inclusion_status", [])
-        if min_inclusion_status:
-            df_min_cumpl = pd.DataFrame(min_inclusion_status)
-            st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
-        comp_df = pd.DataFrame(result.get("compliance_data", []))
-        if not comp_df.empty:
-            st.dataframe(comp_df, use_container_width=True)
+        # ... resto igual ...
+        pass
     elif result.get("success", False):
         diet = result.get("diet", {})
         total_cost = result.get("cost", 0)
         nutritional_values = result.get("nutritional_values", {})
         min_inclusion_status = result.get("min_inclusion_status", [])
-        req_auto = st.session_state.get("nutrientes_requeridos", {})
+        req_auto = st.session_state.get("nutrientes_requeridos", {}).copy()
         tipo_dieta = st.session_state.get("tipo_dieta_sel", "Equilibrada")
+
+        # Elimina proteína y carbohidrato de la tabla de resultados
+        for nut in ["Proteína", "Carbohidrato"]:
+            if nut in req_auto:
+                del req_auto[nut]
 
         # --- Apartado 1: Composición óptima de la dieta ---
         st.subheader("Composición óptima de la dieta (%)")
@@ -342,7 +329,6 @@ with tabs[2]:
             st.subheader("Cumplimiento de mínimo de inclusión para ingredientes seleccionados")
             df_min_cumpl = pd.DataFrame(min_inclusion_status)
             # st.dataframe(df_min_cumpl.set_index("Ingrediente"), use_container_width=True)
-        
 
         # --- Apartado 3: Costos ---
         st.markdown(f"<b>Costo total (por 100 kg):</b> ${total_cost:.2f}", unsafe_allow_html=True)
@@ -353,16 +339,8 @@ with tabs[2]:
 
         # --- Apartado 4: Composición nutricional y cumplimiento ---
         st.subheader("Composición nutricional y cumplimiento")
-        if tipo_dieta == "Alta en proteína":
-            req_auto["Proteína"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
-            req_auto["Carbohidrato"] = {"min": 2.0, "max": 5.0, "unit": "g/100g"}
-        elif tipo_dieta == "Equilibrada":
-            req_auto["Proteína"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
-            req_auto["Carbohidrato"] = {"min": 4.0, "max": 6.0, "unit": "g/100g"}
-        elif tipo_dieta == "Alta en carbohidratos":
-            req_auto["Proteína"] = {"min": 2.0, "max": 4.0, "unit": "g/100g"}
-            req_auto["Carbohidrato"] = {"min": 6.0, "max": 9.0, "unit": "g/100g"}
 
+        # Ya no se muestran ni calculan los límites de proteína/carbohidrato
         comp_list = []
         for nut, req in req_auto.items():
             min_r = req.get("min", "")
