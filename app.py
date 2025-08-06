@@ -255,10 +255,14 @@ with tabs[1]:
             if col not in ["Ingrediente", "Categoría"]:
                 ingredientes_df[col] = pd.to_numeric(ingredientes_df[col], errors='coerce').fillna(0)
         st.subheader("Selecciona las materias primas para formular la dieta por categoría")
-        categorias = sorted(ingredientes_df["Categoría"].dropna().unique())
+
+        # USAR SIEMPRE LA LISTA FIJA DE CATEGORÍAS
+        categorias = ["Proteinas", "Carbohidratos", "Grasas", "Vegetales", "Frutas", "Otros"]
         ingredientes_seleccionados = []
         for cat in categorias:
-            df_cat = ingredientes_df[ingredientes_df["Categoría"].str.strip().str.capitalize() == str(cat).capitalize()]
+            df_cat = ingredientes_df[
+                ingredientes_df["Categoría"].astype(str).str.strip().str.capitalize() == cat
+            ]
             if not df_cat.empty:
                 st.markdown(f"**{cat}**")
                 ing_cat = df_cat["Ingrediente"].tolist()
