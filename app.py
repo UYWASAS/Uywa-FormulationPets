@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, no editable) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, visual mejorada, solo Min) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -150,7 +150,7 @@ with tabs[0]:
         unsafe_allow_html=True
     )
 
-    # Generar DataFrame de requerimientos ajustados (NO editable aquí)
+    # Generar DataFrame de requerimientos ajustados (NO editable aquí, solo Min y visual mejorada)
     def ajustar_nutriente(val_ref, energia_ref, energia_actual):
         if val_ref is None:
             return None
@@ -164,45 +164,76 @@ with tabs[0]:
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
                 "Min": fmt2(energia),
-                "Max": None,
                 "Unidad": unidad
             })
         elif nutr == "EM_1" and unidad == "kcal/g":
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
-            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
                 "Min": fmt2(min_aj),
-                "Max": fmt2(max_aj),
                 "Unidad": unidad
             })
         elif unidad in ["g/100g", "g/kg"]:
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
-            max_aj = ajustar_nutriente(info["max"], energia_ref, energia) if info["max"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
                 "Min": fmt2(min_aj),
-                "Max": fmt2(max_aj),
                 "Unidad": unidad
             })
         else:
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
                 "Min": fmt2(info["min"]),
-                "Max": fmt2(info["max"]),
                 "Unidad": unidad
             })
     df_nutr = pd.DataFrame(requerimientos_ajustados)
-
-    # Normaliza None y texto "None" a ""
     df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
-    df_nutr["Max"] = df_nutr["Max"].replace("None", "").replace({None: ""})
 
-    # Tabla SOLO referencia
-    st.dataframe(df_nutr, use_container_width=True, hide_index=True)
-    # Guardar en sesión para Formulación
-    st.session_state["tabla_requerimientos_base"] = df_nutr.copy()
+    # --- VISUALIZACIÓN MEJORADA ---
+    # Ordena para que los nutrientes con mayor requerimiento estén arriba (opcional)
+    df_nutr_vis = df_nutr.copy()
+    # Si todos los valores son numéricos, puedes ordenar
+    try:
+        df_nutr_vis["Min_num"] = pd.to_numeric(df_nutr_vis["Min"], errors="coerce")
+        df_nutr_vis = df_nutr_vis.sort_values("Min_num", ascending=False)
+    except Exception:
+        pass
 
+    # Visualización con barras de fondo (solo si todos los valores son numéricos)
+    st.markdown(
+        """
+        <style>
+            .nutr-table th, .nutr-table td {padding: 6px 12px;}
+            .nutr-table th {background: #f3f6fa;}
+            .nutr-bar {display:inline-block; height:18px; background:#7fc47f; border-radius:4px;}
+            .nutr-cell {white-space:nowrap;}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown("<div style='overflow-x:auto'><table class='nutr-table'><tr><th>Nutriente</th><th>Mín</th><th>Unidad</th></tr>", unsafe_allow_html=True)
+    max_val = df_nutr_vis["Min_num"].max() if "Min_num" in df_nutr_vis.columns else 1
+    for _, row in df_nutr_vis.iterrows():
+        min_val = row["Min"]
+        try:
+            min_num = float(min_val)
+        except Exception:
+            min_num = 0
+        bar_width = int(200 * min_num / max_val) if max_val > 0 else 0
+        bar_html = f"<span class='nutr-bar' style='width:{bar_width}px'></span>" if bar_width > 0 else ""
+        st.markdown(
+            f"<tr>"
+            f"<td class='nutr-cell'>{row['Nutriente']}</td>"
+            f"<td class='nutr-cell'>{min_val} {bar_html}</td>"
+            f"<td class='nutr-cell'>{row['Unidad']}</td>"
+            f"</tr>",
+            unsafe_allow_html=True
+        )
+    st.markdown("</table></div>", unsafe_allow_html=True)
+
+    # Guardar en sesión para Formulación (SOLO columnas Nutriente, Min, Unidad)
+    st.session_state["tabla_requerimientos_base"] = df_nutr[["Nutriente", "Min", "Unidad"]].copy()
+    
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
