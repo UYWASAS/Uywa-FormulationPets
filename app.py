@@ -940,7 +940,11 @@ with tabs[3]:
             "Gramos en dosis": fmt2(gramos)
         })
     res_df = pd.DataFrame(comp_data)
-    st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+
+    if not res_df.empty and "Ingrediente" in res_df.columns:
+        st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+    else:
+        st.info("No hay ingredientes para mostrar la dieta. Por favor, formula primero la dieta y selecciona ingredientes.")
 
     # === 3. Precio de la dieta ===
     st.subheader("Precio de la dieta")
@@ -962,7 +966,11 @@ with tabs[3]:
             "Máx": fmt2(req.get("max", "")),
             "Unidad": req.get("unit", "")
         })
-    st.dataframe(pd.DataFrame(reqs), use_container_width=True)
+    reqs_df = pd.DataFrame(reqs)
+    if not reqs_df.empty and "Nutriente" in reqs_df.columns:
+        st.dataframe(reqs_df, use_container_width=True)
+    else:
+        st.info("No hay requerimientos para mostrar.")
 
     # === 5. Composición nutricional obtenida ===
     st.subheader("Composición nutricional de la dieta")
@@ -975,7 +983,11 @@ with tabs[3]:
             "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
             "Unidad": req.get("unit", "")
         })
-    st.dataframe(pd.DataFrame(comp_list), use_container_width=True)
+    compnut_df = pd.DataFrame(comp_list)
+    if not compnut_df.empty and "Nutriente" in compnut_df.columns:
+        st.dataframe(compnut_df, use_container_width=True)
+    else:
+        st.info("No hay composición nutricional para mostrar.")
 
     # === 6. Exportar a Excel ===
     st.subheader("Exportar resumen a Excel")
@@ -991,8 +1003,6 @@ with tabs[3]:
         "Precio por kg": fmt2(precio_kg),
         "Precio por dosis": fmt2(precio_dosis)
     }])
-    reqs_df = pd.DataFrame(reqs)
-    compnut_df = pd.DataFrame(comp_list)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
