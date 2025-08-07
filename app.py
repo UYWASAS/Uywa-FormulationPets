@@ -904,9 +904,15 @@ with tabs[3]:
     with cols[0]:
         foto_path = mascota.get("foto", None)
         if foto_path:  # Si guardas la ruta en el perfil
-            st.image(foto_path, width=130)
+            try:
+                st.image(foto_path, width=130)
+            except Exception:
+                st.info("No hay foto disponible.")
         else:
-            st.image("assets/pet_placeholder.png", width=130)
+            try:
+                st.image("assets/pet_placeholder.png", width=130)
+            except Exception:
+                st.info("No hay foto disponible.")
     with cols[1]:
         st.markdown(f"""
         - **Nombre:** {mascota.get('nombre', 'No definido')}
@@ -978,22 +984,16 @@ with tabs[3]:
     import pandas as pd
 
     # Preparamos los distintos DataFrames
-    # Perfíl
     perfil_df = pd.DataFrame([mascota])
-    # Dieta
     dieta_df = res_df
-    # Precio
     precio_df = pd.DataFrame([{
         "Costo total (100kg)": fmt2(total_cost),
         "Precio por kg": fmt2(precio_kg),
         "Precio por dosis": fmt2(precio_dosis)
     }])
-    # Requerimientos
     reqs_df = pd.DataFrame(reqs)
-    # Composición
     compnut_df = pd.DataFrame(comp_list)
 
-    # Botón para descargar
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         perfil_df.to_excel(writer, sheet_name='Perfil Mascota', index=False)
