@@ -233,7 +233,7 @@ with tabs[0]:
 
     # Guardar en sesión para Formulación (SOLO columnas Nutriente, Min, Unidad)
     st.session_state["tabla_requerimientos_base"] = df_nutr[["Nutriente", "Min", "Unidad"]].copy()
-    
+        
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
