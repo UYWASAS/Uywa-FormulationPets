@@ -123,8 +123,7 @@ tabs = st.tabs([
     "Perfil de Mascota",
     "Formulación",
     "Resultados",
-    "Gráficos",
-    "Comparar Escenarios"
+    "Resumen y Exportar"
 ])
 
 from nutrient_tools import transformar_referencia_a_porcentaje
@@ -893,145 +892,121 @@ with tabs[2]:
             else:
                 st.info("Selecciona al menos un nutriente para visualizar el precio sombra por ingrediente.")
 
-# ======================== BLOQUE 9: COMPARADOR DE ESCENARIOS AVANZADO ========================
+# ======================== BLOQUE 9: RESUMEN Y EXPORTAR ========================
 with tabs[3]:
-    st.header("Comparador de escenarios guardados")
+    st.header("Resumen general y exportación")
 
-    escenarios = cargar_escenarios()
-    if not escenarios:
-        st.info("No hay escenarios guardados para comparar.")
-    else:
-        nombres = [esc["nombre"] for esc in escenarios]
-        seleccionados = st.multiselect(
-            "Selecciona escenarios para comparar",
-            nombres,
-            default=nombres[:2] if len(nombres) > 1 else nombres
-        )
-        esc_sel = [esc for esc in escenarios if esc["nombre"] in seleccionados]
+    # === 1. Perfil de la mascota ===
+    perfil = st.session_state.get("profile", {})
+    mascota = perfil.get("mascota", {})
+    st.subheader("Perfil de la mascota")
+    cols = st.columns([1, 3])
+    with cols[0]:
+        foto_path = mascota.get("foto", None)
+        if foto_path:  # Si guardas la ruta en el perfil
+            st.image(foto_path, width=130)
+        else:
+            st.image("assets/pet_placeholder.png", width=130)
+    with cols[1]:
+        st.markdown(f"""
+        - **Nombre:** {mascota.get('nombre', 'No definido')}
+        - **Especie:** {mascota.get('especie', 'No definido')}
+        - **Edad:** {mascota.get('edad', 'No definido')} años
+        - **Peso:** {mascota.get('peso', 'No definido')} kg
+        - **Condición:** {mascota.get('condicion', 'No definido')}
+        """)
 
-        if esc_sel:
-            # --- TABLA DE COSTOS ---
-            st.subheader("Comparación de costo total (USD/ton)")
-            df_cost = pd.DataFrame({
-                esc["nombre"]: [float(esc.get("costo_total", "0").replace(",", ""))] for esc in esc_sel
-            })
-            df_cost.index = ["Costo total (USD/ton)"]
-            st.dataframe(df_cost, use_container_width=True)
+    # === 2. Dieta (proporciones y gramos) ===
+    st.subheader("Composición de la dieta formulada")
+    result = st.session_state.get("last_result", None)
+    diet = result.get("diet", {}) if result else {}
+    dosis_g = st.session_state.get("dosis_dieta_g_formulacion", 1000)
+    ingredientes_df_filtrado = st.session_state.get("ingredients_df", None)
+    ingredientes_sel = list(ingredientes_df_filtrado["Ingrediente"]) if ingredientes_df_filtrado is not None and "Ingrediente" in ingredientes_df_filtrado.columns else []
 
-            # --- TABLA DE COMPOSICIÓN DE INGREDIENTES ---
-            st.subheader("Comparación de composición de ingredientes (%)")
-            ingredientes_all = sorted(set(sum([list(esc["ingredientes"]) for esc in esc_sel], [])))
-            data_comp = {}
-            for esc in esc_sel:
-                df = pd.DataFrame(esc["data_formula"])
-                comp = df.set_index("Ingrediente")["% Inclusión"] if "Ingrediente" in df.columns else pd.Series()
-                comp = comp.reindex(ingredientes_all).fillna(0)
-                data_comp[esc["nombre"]] = comp
-            df_comp = pd.DataFrame(data_comp)
-            df_comp.index.name = "Ingrediente"
-            st.dataframe(df_comp, use_container_width=True)
+    comp_data = []
+    for ing in ingredientes_sel:
+        porcentaje = diet.get(ing, 0.0)
+        gramos = (porcentaje / 100.0) * dosis_g
+        comp_data.append({
+            "Ingrediente": ing,
+            "% Inclusión": fmt2(porcentaje),
+            "Gramos en dosis": fmt2(gramos)
+        })
+    res_df = pd.DataFrame(comp_data)
+    st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
 
-            # --- TABLA DE PERFIL NUTRICIONAL (TODOS LOS NUTRIENTES POSIBLES) ---
-            st.subheader("Comparación de perfil nutricional (todos los nutrientes)")
-            # Usa get_nutrient_list si tienes el df de ingredientes principal, si no, muestra todos los nutrientes encontrados
-            if 'ingredients_df' in st.session_state and st.session_state['ingredients_df'] is not None:
-                nutrientes_posibles = get_nutrient_list(st.session_state['ingredients_df'])
-            else:
-                nutrientes_posibles = sorted(set(sum([esc["nutrientes"] for esc in esc_sel], [])))
-            data_nut = {}
-            for esc in esc_sel:
-                df = pd.DataFrame(esc["data_formula"])
-                nut_vals = pd.Series({nut: df[nut].sum() if nut in df.columns else 0 for nut in nutrientes_posibles})
-                data_nut[esc["nombre"]] = nut_vals
-            df_nut = pd.DataFrame(data_nut)
-            df_nut.index.name = "Nutriente"
-            st.dataframe(df_nut, use_container_width=True)
+    # === 3. Precio de la dieta ===
+    st.subheader("Precio de la dieta")
+    total_cost = result.get("cost", 0)
+    precio_kg = total_cost / 100 if total_cost else 0
+    precio_dosis = (precio_kg * dosis_g) / 1000
+    st.markdown(f"- **Costo total (por 100 kg):** ${fmt2(total_cost)}")
+    st.markdown(f"- **Precio por kg:** ${fmt2(precio_kg)}")
+    st.markdown(f"- **Precio por dosis diaria:** ${fmt2(precio_dosis)}")
 
-            # --- SELECCIÓN Y COMPARACIÓN DE GRÁFICOS ---
-            st.subheader("Comparación gráfica")
-            opciones_grafico = [
-                "Costo total por ingrediente",
-                *["Aporte de " + nut for nut in nutrientes_posibles],
-                *["Precio sombra de " + nut for nut in nutrientes_posibles]
-            ]
-            grafico_sel = st.selectbox("Selecciona el gráfico a comparar:", opciones_grafico)
+    # === 4. Requerimientos utilizados ===
+    st.subheader("Requerimientos utilizados (por kg dieta)")
+    user_requirements = st.session_state.get("nutrientes_requeridos", {})
+    reqs = []
+    for nut, req in user_requirements.items():
+        reqs.append({
+            "Nutriente": nut,
+            "Mín": fmt2(req.get("min", "")),
+            "Máx": fmt2(req.get("max", "")),
+            "Unidad": req.get("unit", "")
+        })
+    st.dataframe(pd.DataFrame(reqs), use_container_width=True)
 
-            ncols = len(esc_sel)
-            cols = st.columns(ncols)
-            for idx, esc in enumerate(esc_sel):
-                with cols[idx]:
-                    st.markdown(f"**{esc['nombre']}**")
-                    df_formula = pd.DataFrame(esc["data_formula"])
-                    color_map = get_color_map(list(df_formula["Ingrediente"])) if "Ingrediente" in df_formula.columns else {}
+    # === 5. Composición nutricional obtenida ===
+    st.subheader("Composición nutricional de la dieta")
+    nutritional_values = result.get("nutritional_values", {}) if result else {}
+    comp_list = []
+    for nut, req in user_requirements.items():
+        obtenido = nutritional_values.get(nut, None)
+        comp_list.append({
+            "Nutriente": nut,
+            "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
+            "Unidad": req.get("unit", "")
+        })
+    st.dataframe(pd.DataFrame(comp_list), use_container_width=True)
 
-                    if grafico_sel == "Costo total por ingrediente":
-                        if "precio" in df_formula.columns and "% Inclusión" in df_formula.columns and "Ingrediente" in df_formula.columns:
-                            costos = df_formula["precio"] * df_formula["% Inclusión"] / 100 * 10  # USD/ton
-                            fig = go.Figure([go.Bar(
-                                x=df_formula["Ingrediente"],
-                                y=costos,
-                                marker_color=[color_map.get(ing, "#19345c") for ing in df_formula["Ingrediente"]],
-                                text=[fmt2(c) for c in costos],
-                                textposition='auto'
-                            )])
-                            fig.update_layout(
-                                xaxis_title="Ingrediente",
-                                yaxis_title="Costo aportado (USD/ton)",
-                                title="Costo total por ingrediente",
-                                showlegend=False,
-                                template="simple_white"
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("No hay datos suficientes en este escenario.")
+    # === 6. Exportar a Excel ===
+    st.subheader("Exportar resumen a Excel")
 
-                    elif grafico_sel.startswith("Aporte de "):
-                        nut = grafico_sel.replace("Aporte de ", "")
-                        if nut in df_formula.columns and "% Inclusión" in df_formula.columns and "Ingrediente" in df_formula.columns:
-                            valores = df_formula[nut] * df_formula["% Inclusión"] / 100
-                            fig = go.Figure([go.Bar(
-                                x=df_formula["Ingrediente"],
-                                y=valores,
-                                marker_color=[color_map.get(ing, "#19345c") for ing in df_formula["Ingrediente"]],
-                                text=[fmt2(v) for v in valores],
-                                textposition='auto'
-                            )])
-                            fig.update_layout(
-                                xaxis_title="Ingrediente",
-                                yaxis_title=f"Aporte de {nut}",
-                                title=f"Aporte de cada ingrediente a {nut}",
-                                showlegend=False,
-                                template="simple_white"
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("No hay datos suficientes en este escenario.")
+    import io
+    import pandas as pd
 
-                    elif grafico_sel.startswith("Precio sombra de "):
-                        nut = grafico_sel.replace("Precio sombra de ", "")
-                        if nut in df_formula.columns and "precio" in df_formula.columns and "Ingrediente" in df_formula.columns:
-                            precios_unit = []
-                            for _, row in df_formula.iterrows():
-                                contenido = row.get(nut, 0)
-                                precio = row.get("precio", np.nan)
-                                if pd.notnull(contenido) and contenido > 0 and pd.notnull(precio):
-                                    precios_unit.append(precio / contenido)
-                                else:
-                                    precios_unit.append(np.nan)
-                            fig = go.Figure([go.Bar(
-                                x=df_formula["Ingrediente"],
-                                y=precios_unit,
-                                marker_color=[color_map.get(ing, "#19345c") for ing in df_formula["Ingrediente"]],
-                                text=[fmt2(v) if pd.notnull(v) else "" for v in precios_unit],
-                                textposition='auto'
-                            )])
-                            fig.update_layout(
-                                xaxis_title="Ingrediente",
-                                yaxis_title=f"Precio sombra de {nut} (USD por unidad)",
-                                title=f"Precio sombra por ingrediente para {nut}",
-                                showlegend=False,
-                                template="simple_white"
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("No hay datos suficientes en este escenario.")
+    # Preparamos los distintos DataFrames
+    # Perfíl
+    perfil_df = pd.DataFrame([mascota])
+    # Dieta
+    dieta_df = res_df
+    # Precio
+    precio_df = pd.DataFrame([{
+        "Costo total (100kg)": fmt2(total_cost),
+        "Precio por kg": fmt2(precio_kg),
+        "Precio por dosis": fmt2(precio_dosis)
+    }])
+    # Requerimientos
+    reqs_df = pd.DataFrame(reqs)
+    # Composición
+    compnut_df = pd.DataFrame(comp_list)
+
+    # Botón para descargar
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        perfil_df.to_excel(writer, sheet_name='Perfil Mascota', index=False)
+        dieta_df.to_excel(writer, sheet_name='Dieta', index=False)
+        precio_df.to_excel(writer, sheet_name='Precio', index=False)
+        reqs_df.to_excel(writer, sheet_name='Requerimientos', index=False)
+        compnut_df.to_excel(writer, sheet_name='Composición', index=False)
+        writer.save()
+    excel_data = output.getvalue()
+
+    st.download_button(
+        label="Descargar resumen en Excel",
+        data=excel_data,
+        file_name="Resumen_dieta_uywa.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
