@@ -1,7 +1,6 @@
 import pulp
 import pandas as pd
 import math
-from utils import fmt2
 
 class DietFormulator:
     def __init__(
@@ -21,7 +20,7 @@ class DietFormulator:
     ):
         self.ingredients_df = ingredients_df
         self.nutrient_list = nutrient_list
-        self.requirements = requirements  # DEBE venir de la tabla de formulación ajustada
+        self.requirements = requirements  # Deben venir de la tabla editable de formulación
         self.selected_species = selected_species
         self.selected_stage = selected_stage
         self.limits = limits if limits else {"min": {}, "max": {}}
@@ -41,7 +40,7 @@ class DietFormulator:
             prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
     def _add_nutrient_constraints(self, prob, ingredient_vars):
-        # SOLO restricciones duras, sin slacks
+        # Solo restricciones duras sin slacks ni penalizaciones
         for nut in self.nutrient_list:
             if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
@@ -68,6 +67,7 @@ class DietFormulator:
         ingredient_vars = pulp.LpVariable.dicts(
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
+        # Suma de inclusiones debe ser igual a 1 (100% del alimento)
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
         self._add_ingredient_inclusion_constraints(prob, ingredient_vars)
         self._add_nutrient_constraints(prob, ingredient_vars)
@@ -94,7 +94,7 @@ class DietFormulator:
                 ingredient_amounts[k] /= total
 
         for ingredient_name, frac in ingredient_amounts.items():
-            diet[ingredient_name] = float(fmt2(frac * 100))
+            diet[ingredient_name] = round(frac * 100, 4)
 
         nutritional_values = {}
         for nutrient in self.nutrient_list:
@@ -111,7 +111,7 @@ class DietFormulator:
                     if pd.isna(nut_val):
                         nut_val = 0.0
                     valor_nut += nut_val * frac
-            nutritional_values[nutrient] = float(fmt2(valor_nut))
+            nutritional_values[nutrient] = round(valor_nut, 4)
 
         total_cost_value = 0
         for ingredient_name, frac in ingredient_amounts.items():
@@ -122,7 +122,7 @@ class DietFormulator:
             except Exception:
                 precio = 0.0
             total_cost_value += precio * frac
-        total_cost_value = float(fmt2(total_cost_value * 100))  # por 100 kg
+        total_cost_value = round(total_cost_value * 100, 4)  # por 100 kg
 
         return {
             "success": True,
