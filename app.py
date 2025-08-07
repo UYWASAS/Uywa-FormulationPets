@@ -437,15 +437,26 @@ with tabs[2]:
 
     diet = result.get("diet", {}) if result else {}
     comp_data = []
+
+    # Obtener la dosis diaria usada en formulación (revisar todas las keys posibles)
+    dosis_g = (
+        st.session_state.get("dosis_dieta_g_formulacion")
+        or st.session_state.get("dosis_dieta_g")
+        or 1000  # Valor por defecto si no existe
+    )
+
     for ing in ingredientes_sel:
+        porcentaje = diet.get(ing, 0.0)
+        gramos = (porcentaje / 100.0) * dosis_g
         comp_data.append({
             "Ingrediente": ing,
-            "% Inclusión": diet.get(ing, 0.0)
+            "% Inclusión": fmt2(porcentaje),
+            "Gramos en dosis": fmt2(gramos)
         })
     res_df = pd.DataFrame(comp_data)
-    st.subheader("Composición óptima de la dieta (%)")
+    st.subheader("Composición óptima de la dieta (por dosis seleccionada)")
     if "Ingrediente" in res_df.columns and not res_df.empty:
-        st.dataframe(fmt2_df(res_df.set_index("Ingrediente")), use_container_width=True)
+        st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
     else:
         st.info("Carga la matriz de ingredientes y selecciona al menos un ingrediente para ver la composición de la dieta.")
 
