@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# Bloque 5.1: TAB PERFIL DE MASCOTA (visualización mejorada, solo Min, sin Max)
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, no editable, solo Min, formato mejorado) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -162,64 +162,89 @@ with tabs[0]:
         if nutr == "EM" and unidad == "kcal/kg":
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": float(energia),
+                "Min": fmt2(energia),
                 "Unidad": unidad
             })
         elif nutr == "EM_1" and unidad == "kcal/g":
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": min_aj,
+                "Min": fmt2(min_aj),
                 "Unidad": unidad
             })
         elif unidad in ["g/100g", "g/kg"]:
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": min_aj,
+                "Min": fmt2(min_aj),
                 "Unidad": unidad
             })
         else:
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": info["min"],
+                "Min": fmt2(info["min"]),
                 "Unidad": unidad
             })
     df_nutr = pd.DataFrame(requerimientos_ajustados)
-    df_nutr = df_nutr.replace("None", np.nan)
-    df_nutr = df_nutr.dropna(subset=["Min"])  # Quita vacíos
+    df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
 
-    # Ordenar por valor mínimo descendente
-    df_nutr["Min_num"] = pd.to_numeric(df_nutr["Min"], errors="coerce")
-    df_nutr = df_nutr.sort_values(by="Min_num", ascending=False).reset_index(drop=True)
+    # --- TABLA BONITA CON HTML Y CSS ---
+    st.markdown("""
+        <style>
+        .styled-table {
+            border-collapse: collapse;
+            margin: 10px 0 20px 0;
+            font-size: 16px;
+            min-width: 390px;
+            width: 90%;
+            border-radius: 14px 14px 0 0;
+            overflow: hidden;
+            box-shadow: 0 2px 10px #e3ecf7;
+        }
+        .styled-table th {
+            background-color: #19345c !important;
+            color: #fff;
+            text-align: center;
+            font-weight: bold;
+            padding: 10px 7px;
+            font-size: 17px;
+            border-right: 1px solid #e3ecf7;
+        }
+        .styled-table td {
+            padding: 7px 7px;
+            text-align: center;
+            border-bottom: 1px solid #e3ecf7;
+            font-size: 16px;
+        }
+        .styled-table tr:nth-child(even) {
+            background-color: #f3f6fa;
+        }
+        .styled-table tr:nth-child(odd) {
+            background-color: #eaf3fc;
+        }
+        .styled-table td.min-cell {
+            font-weight: bold;
+            color: #23783d;
+            background: #e0f7e9;
+            border-radius: 6px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    # Gráfico de barras horizontales (tipo tabla visual, no editable)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        y=df_nutr["Nutriente"],
-        x=df_nutr["Min_num"],
-        orientation='h',
-        marker=dict(color="#7fc47f"),
-        text=[f"{fmt2(min)} {uni}" for min, uni in zip(df_nutr["Min"], df_nutr["Unidad"])],
-        textposition='outside',
-        hovertemplate='%{y}<br>Mín: %{x} %{customdata}',
-        customdata=df_nutr["Unidad"],
-    ))
-    fig.update_layout(
-        height=350 + 18*len(df_nutr),
-        xaxis_title="Valor mínimo requerido",
-        yaxis_title="Nutriente",
-        plot_bgcolor='#f3f6fa',
-        paper_bgcolor='#f3f6fa',
-        margin=dict(l=12, r=12, t=12, b=12),
-        showlegend=False
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    # Render HTML table
+    st.markdown("<table class='styled-table'><tr><th>Nutriente</th><th>Mín</th><th>Unidad</th></tr>", unsafe_allow_html=True)
+    for _, row in df_nutr.iterrows():
+        st.markdown(
+            f"<tr>"
+            f"<td>{row['Nutriente']}</td>"
+            f"<td class='min-cell'>{row['Min']}</td>"
+            f"<td>{row['Unidad']}</td>"
+            f"</tr>",
+            unsafe_allow_html=True
+        )
+    st.markdown("</table>", unsafe_allow_html=True)
 
-    # Si quieres la tabla clásica pero solo Min:
-    st.markdown("#### Tabla de referencia (solo valores mínimos)")
-    st.dataframe(df_nutr[["Nutriente", "Min", "Unidad"]], use_container_width=True, hide_index=True)
-
+    # Guardar en sesión para Formulación (SOLO columnas Nutriente, Min, Unidad)
     st.session_state["tabla_requerimientos_base"] = df_nutr[["Nutriente", "Min", "Unidad"]].copy()
         
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
