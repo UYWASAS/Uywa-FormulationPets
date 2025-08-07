@@ -1011,7 +1011,6 @@ with tabs[3]:
         precio_df.to_excel(writer, sheet_name='Precio', index=False)
         reqs_df.to_excel(writer, sheet_name='Requerimientos', index=False)
         compnut_df.to_excel(writer, sheet_name='Composición', index=False)
-        writer.save()
     excel_data = output.getvalue()
 
     st.download_button(
