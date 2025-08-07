@@ -228,12 +228,10 @@ with tabs[1]:
 
     # 3. Calcular requerimientos por kg de dieta
     df_req_kg = df_base.copy()
-    # Convierte Min y Max a float si no están vacíos, para hacer el cálculo
     df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
     df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
     df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
     df_req_kg["Max por kg dieta"] = df_req_kg["Max"] / dosis_kg
-    # Si la celda original está vacía, deja la nueva vacía
     df_req_kg.loc[df_base["Min"].isin(["", None, "None"]), "Min por kg dieta"] = ""
     df_req_kg.loc[df_base["Max"].isin(["", None, "None"]), "Max por kg dieta"] = ""
 
@@ -377,7 +375,7 @@ with tabs[1]:
                 st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                 st.success("¡Formulación realizada!")
             else:
-                st.error(result.get("message", "No se pudo formular la dieta.")
+                st.error(result.get("message", "No se pudo formular la dieta."))
 
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
