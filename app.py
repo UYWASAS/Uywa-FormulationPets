@@ -249,6 +249,11 @@ with tabs[1]:
     ingredientes_df = load_ingredients(ingredientes_file)
     formulable = False
 
+    ingredientes_sel = []
+    ingredientes_df_filtrado = pd.DataFrame()
+    limites_min = {}
+    limites_max = {}
+
     if ingredientes_df is not None and not ingredientes_df.empty:
         for col in ingredientes_df.columns:
             if col not in ["Ingrediente", "Categoría"]:
@@ -273,6 +278,38 @@ with tabs[1]:
                 ingredientes_seleccionados.extend(sel_cat)
         ingredientes_sel = list(dict.fromkeys(ingredientes_seleccionados))
         ingredientes_df_filtrado = ingredientes_df[ingredientes_df["Ingrediente"].isin(ingredientes_sel)].copy()
+
+        # Tabla editable para min/max de inclusión
+        if not ingredientes_df_filtrado.empty:
+            st.subheader("Límites de inclusión de materias primas (%)")
+            if "min_inclusion" not in st.session_state or "max_inclusion" not in st.session_state:
+                st.session_state["min_inclusion"] = {ing: 0.0 for ing in ingredientes_sel}
+                st.session_state["max_inclusion"] = {ing: 100.0 for ing in ingredientes_sel}
+
+            limites_df = pd.DataFrame({
+                "Ingrediente": ingredientes_sel,
+                "Mínimo (%)": [st.session_state["min_inclusion"].get(ing, 0.0) for ing in ingredientes_sel],
+                "Máximo (%)": [st.session_state["max_inclusion"].get(ing, 100.0) for ing in ingredientes_sel],
+            })
+
+            limites_editados = st.data_editor(
+                limites_df,
+                column_config={
+                    "Mínimo (%)": st.column_config.NumberColumn("Mínimo (%)", min_value=0.0, max_value=100.0, step=0.01),
+                    "Máximo (%)": st.column_config.NumberColumn("Máximo (%)", min_value=0.0, max_value=100.0, step=0.01),
+                },
+                use_container_width=True,
+                hide_index=True,
+                key="tabla_limites_inclusion"
+            )
+            for _, row in limites_editados.iterrows():
+                ing = row["Ingrediente"]
+                st.session_state["min_inclusion"][ing] = float(row["Mínimo (%)"])
+                st.session_state["max_inclusion"][ing] = float(row["Máximo (%)"])
+
+            limites_min = {ing: st.session_state["min_inclusion"].get(ing, 0.0) / 100.0 for ing in ingredientes_sel}
+            limites_max = {ing: st.session_state["max_inclusion"].get(ing, 100.0) / 100.0 for ing in ingredientes_sel}
+
         with st.expander("Editar materias primas seleccionadas"):
             st.write("Ajusta los valores nutricionales y precio solo para los ingredientes seleccionados.")
             editable_cols = [col for col in ingredientes_df_filtrado.columns if col not in ["Ingrediente", "Categoría"]]
@@ -290,15 +327,14 @@ with tabs[1]:
         if st.button("Formular dieta automática", key="btn_formular_dieta_auto"):
             user_requirements = st.session_state.get("nutrientes_requeridos", {})
             nutrientes_seleccionados = list(user_requirements.keys())
-            # Forzar inclusión mínima a todos los seleccionados
-            min_selected_ingredients = {ing: 0.0001 for ing in ingredientes_sel}
+            # Limites por ingrediente
             formulator = DietFormulator(
                 ingredientes_df_filtrado,
                 nutrientes_seleccionados,
                 user_requirements,
-                limits={"min": {}, "max": {}},
+                limits={"min": limites_min, "max": limites_max},
                 ratios=[],
-                min_selected_ingredients=min_selected_ingredients,
+                min_selected_ingredients={},
                 diet_type=None
             )
             result = formulator.solve()
