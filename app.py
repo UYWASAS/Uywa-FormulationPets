@@ -377,9 +377,48 @@ with tabs[1]:
                 st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                 st.success("¡Formulación realizada!")
             else:
-                st.error(result.get("message", "No se pudo formular la dieta."))
+                st.error(result.get("message", "No se pudo formular la dieta.")
+
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
+
+    # --------- MOSTRAR RESULTADOS Y VALIDACIÓN (solo max es obligatorio) ---------
+    if st.session_state.get("last_nutritional_values", None) is not None:
+        st.subheader("Composición nutricional y cumplimiento (editable)")
+        df_result = []
+        for nut in st.session_state["nutrientes_seleccionados"]:
+            req = st.session_state["nutrientes_requeridos"][nut]
+            min_val = req.get("min", None)
+            max_val = req.get("max", None)
+            unit = req.get("unit", "")
+            obtenido = st.session_state["last_nutritional_values"].get(nut, None)
+            cumple = True
+            # SOLO falla si se pasa del max
+            if max_val not in ["", None, "None", 0, 0.0]:
+                try:
+                    if float(max_val) > 0 and obtenido is not None and obtenido > float(max_val):
+                        cumple = False
+                except Exception:
+                    pass
+            df_result.append({
+                "Nutriente": nut,
+                "Min": min_val,
+                "Max": max_val,
+                "Obtenido": obtenido,
+                "Unidad": unit,
+                "Cumple": cumple
+            })
+
+        df_result = pd.DataFrame(df_result)
+
+        def mark_cumple(val):
+            if val is True:
+                return "✅"
+            else:
+                return "❌"
+
+        df_result["Cumple"] = df_result["Cumple"].apply(mark_cumple)
+        st.dataframe(df_result, use_container_width=True)
         
 # ===================== BLOQUE 7: RESULTADOS DE LA FORMULACIÓN AUTOMÁTICA (completo y robusto) =====================
 with tabs[2]:
