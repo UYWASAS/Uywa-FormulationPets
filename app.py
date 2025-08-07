@@ -211,10 +211,10 @@ with tabs[1]:
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # ----------- NUEVO BLOQUE: AJUSTE DE REQUERIMIENTOS SEGÚN DOSIS -----------
-    st.subheader("Ajuste de requerimientos nutricionales por dosis diaria")
+    # ----------- AJUSTE DE REQUERIMIENTOS SEGÚN DOSIS -----------
+    st.subheader("Ajuste de requerimientos nutricionales según dosis diaria")
 
-    # 1. Requerimientos diarios desde el perfil (ya ajustados a MER)
+    # 1. Requerimientos diarios ya ajustados a MER desde el perfil
     df_base = st.session_state.get("tabla_requerimientos_base", pd.DataFrame()).copy()
     if df_base.empty:
         st.warning("Primero completa el perfil de mascota para obtener requerimientos.")
@@ -228,16 +228,16 @@ with tabs[1]:
 
     # 3. Calcular requerimientos por kg de dieta
     df_req_kg = df_base.copy()
-    df_req_kg["Min por kg dieta"] = df_req_kg.apply(
-        lambda row: float(row["Min"])/dosis_kg if row["Min"] not in ["", None, "None"] else "",
-        axis=1
-    )
-    df_req_kg["Max por kg dieta"] = df_req_kg.apply(
-        lambda row: float(row["Max"])/dosis_kg if row["Max"] not in ["", None, "None"] and float(row["Max"]) > 0 else "",
-        axis=1
-    )
+    # Convertir Min y Max a float (si no están vacíos)
+    df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
+    df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
+    df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
+    df_req_kg["Max por kg dieta"] = df_req_kg["Max"] / dosis_kg
+    # Si la celda original está vacía, deja la nueva vacía
+    df_req_kg.loc[df_base["Min"].isin(["", None, "None"]), "Min por kg dieta"] = ""
+    df_req_kg.loc[df_base["Max"].isin(["", None, "None"]), "Max por kg dieta"] = ""
 
-    # 4. Tabla editable de requerimientos por kg de dieta (para el modelo)
+    # 4. Tabla editable de requerimientos por kg de dieta
     editable_cols = {
         "Min por kg dieta": st.column_config.NumberColumn("Min por kg dieta", min_value=0.0, step=0.01),
         "Max por kg dieta": st.column_config.NumberColumn("Max por kg dieta", min_value=0.0, step=0.01),
@@ -271,7 +271,7 @@ with tabs[1]:
         }
     st.session_state["nutrientes_requeridos"] = user_requirements
 
-  # ---------- BLOQUE 6.1: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
+    # ------------------- INGREDIENTES Y LÍMITES -------------------
     ingredientes_file = st.file_uploader(
         "Matriz de ingredientes (.csv o .xlsx)", 
         type=["csv", "xlsx"], 
@@ -353,12 +353,11 @@ with tabs[1]:
         st.write(f"Ingredientes seleccionados: {', '.join(ingredientes_sel) if ingredientes_sel else 'Ninguno'}")
         formulable = not ingredientes_df_filtrado.empty
 
-    # ---------- BLOQUE 6.2: FORMULAR DIETA ----------
+    # ---------- FORMULAR DIETA ----------
     if formulable:
         if st.button("Formular dieta automática", key="btn_formular_dieta_auto"):
             user_requirements = st.session_state.get("nutrientes_requeridos", {})
             nutrientes_seleccionados = list(user_requirements.keys())
-            # Limites por ingrediente
             formulator = DietFormulator(
                 ingredientes_df_filtrado,
                 nutrientes_seleccionados,
