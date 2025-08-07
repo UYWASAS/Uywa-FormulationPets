@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, no editable, solo Min, formato mejorado) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, solo Min, formato mejorado) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -188,7 +188,7 @@ with tabs[0]:
     df_nutr = pd.DataFrame(requerimientos_ajustados)
     df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
 
-    # --- TABLA BONITA CON HTML Y CSS ---
+    # --- TABLA BONITA CON HTML Y CSS (renderizada de una sola vez) ---
     st.markdown("""
         <style>
         .styled-table {
@@ -231,21 +231,81 @@ with tabs[0]:
         </style>
     """, unsafe_allow_html=True)
 
-    # Render HTML table
-    st.markdown("<table class='styled-table'><tr><th>Nutriente</th><th>Mín</th><th>Unidad</th></tr>", unsafe_allow_html=True)
+    html_table = "<table class='styled-table'><tr><th>Nutriente</th><th>Mín</th><th>Unidad</th></tr>"
     for _, row in df_nutr.iterrows():
-        st.markdown(
+        html_table += (
             f"<tr>"
             f"<td>{row['Nutriente']}</td>"
             f"<td class='min-cell'>{row['Min']}</td>"
             f"<td>{row['Unidad']}</td>"
-            f"</tr>",
-            unsafe_allow_html=True
+            f"</tr>"
         )
-    st.markdown("</table>", unsafe_allow_html=True)
+    html_table += "</table>"
+    st.markdown(html_table, unsafe_allow_html=True)
 
     # Guardar en sesión para Formulación (SOLO columnas Nutriente, Min, Unidad)
     st.session_state["tabla_requerimientos_base"] = df_nutr[["Nutriente", "Min", "Unidad"]].copy()
+
+# ======================== BLOQUE 6: TAB FORMULACIÓN ========================
+with tabs[1]:
+    st.header("Formulación automática de dieta")
+    mascota = st.session_state.get("profile", {}).get("mascota", {})
+    nombre_mascota = mascota.get("nombre", "Mascota")
+    st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    # ----------- AJUSTE DE REQUERIMIENTOS SEGÚN DOSIS -----------
+    st.subheader("Ajuste de requerimientos nutricionales según dosis diaria")
+
+    # 1. Requerimientos diarios ya ajustados a MER desde el perfil
+    df_base = st.session_state.get("tabla_requerimientos_base", pd.DataFrame()).copy()
+    if df_base.empty:
+        st.warning("Primero completa el perfil de mascota para obtener requerimientos.")
+        st.stop()
+
+    # 2. Input dosis diaria
+    dosis_g = st.number_input(
+        "Dosis diaria de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g"
+    )
+    dosis_kg = dosis_g / 1000
+
+    # 3. Calcular requerimientos por kg de dieta
+    df_req_kg = df_base.copy()
+    df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
+    # No usamos Max: eliminamos cualquier referencia a Max
+    df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
+    df_req_kg.loc[df_base["Min"].isin(["", None, "None"]), "Min por kg dieta"] = ""
+
+    # 4. Tabla editable de requerimientos por kg de dieta (solo Min)
+    editable_cols = {
+        "Min por kg dieta": st.column_config.NumberColumn("Min por kg dieta", min_value=0.0, step=0.01),
+    }
+    df_req_kg_edit = st.data_editor(
+        df_req_kg[["Nutriente", "Min por kg dieta", "Unidad"]],
+        column_config=editable_cols,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        key="tabla_req_kg_editable"
+    )
+
+    # 5. Guardar dict para el optimizador (solo nut: min por kg dieta)
+    user_requirements = {}
+    for _, row in df_req_kg_edit.iterrows():
+        nut = row["Nutriente"]
+        try:
+            min_val = float(row["Min por kg dieta"]) if row["Min por kg dieta"] not in ["", None, "None"] else 0.0
+        except Exception:
+            min_val = 0.0
+        unidad = row["Unidad"]
+        user_requirements[nut] = {
+            "min": min_val,
+            "max": None,  # Ya no se usa max
+            "unit": unidad
+        }
+    st.session_state["nutrientes_requeridos"] = user_requirements
+
+    # (el resto del bloque 6 sigue igual; asegúrate de no usar "Max" en adelante)
         
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
