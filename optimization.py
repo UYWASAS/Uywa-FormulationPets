@@ -46,9 +46,9 @@ class DietFormulator:
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
             prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-    def _add_macronutrient_constraints(self, prob, ingredient_vars, slack_vars_min, slack_vars_max):
+    def _add_nutrient_constraints(self, prob, ingredient_vars, slack_vars_min, slack_vars_max):
         for nut in self.nutrient_list:
-            if nut in self.ingredients_df.columns and nut in self.MACRO_MIN_NUTRIENTS:
+            if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
                 req = self.requirements.get(nut, {})
                 req_min = req.get("min", None)
@@ -64,29 +64,7 @@ class DietFormulator:
                     try:
                         max_val = float(req_max)
                         if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum <= max_val, f"Max_{nut}"
-                    except Exception:
-                        pass
-
-    def _add_other_nutrient_constraints(self, prob, ingredient_vars, slack_vars_min, slack_vars_max):
-        for nut in self.nutrient_list:
-            if nut in self.ingredients_df.columns and nut not in self.MACRO_MIN_NUTRIENTS:
-                nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
-                req = self.requirements.get(nut, {})
-                req_min = req.get("min", None)
-                req_max = req.get("max", None)
-                if req_min is not None and str(req_min) != "":
-                    try:
-                        min_val = float(req_min)
-                        if not math.isnan(min_val) and not math.isinf(min_val):
-                            prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
-                    except Exception:
-                        pass
-                if req_max is not None and str(req_max) != "":
-                    try:
-                        max_val = float(req_max)
-                        if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum <= max_val, f"Max_{nut}"
+                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
                     except Exception:
                         pass
 
@@ -99,12 +77,17 @@ class DietFormulator:
         slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         self._add_ingredient_inclusion_constraints(prob, ingredient_vars)
-        self._add_macronutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
-        self._add_other_nutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
-        total_slack = (
-            pulp.lpSum([1000 * slack_vars_min[nut] + 1000 * slack_vars_max[nut] for nut in self.nutrient_list])
-        )
-        prob += total_slack
+        self._add_nutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
+        # Cost as objective
+        total_cost = pulp.lpSum([
+            ingredient_vars[i] * float(self.ingredients_df.loc[i, "precio"] if "precio" in self.ingredients_df.columns else 0)
+            for i in self.ingredients_df.index
+        ])
+        # Penalize slack if needed (very high weight)
+        penalty = pulp.lpSum([
+            1e6 * slack_vars_min[nut] + 1e6 * slack_vars_max[nut] for nut in self.nutrient_list
+        ])
+        prob += total_cost + penalty
         return prob, ingredient_vars
 
     def _collect_results(self, ingredient_vars):
