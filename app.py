@@ -228,7 +228,7 @@ with tabs[1]:
 
     # 3. Calcular requerimientos por kg de dieta
     df_req_kg = df_base.copy()
-    # Convertir Min y Max a float (si no están vacíos)
+    # Convierte Min y Max a float si no están vacíos, para hacer el cálculo
     df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
     df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
     df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
@@ -373,7 +373,6 @@ with tabs[1]:
                 st.session_state["last_diet"] = result.get("diet", {})
                 st.session_state["last_cost"] = result.get("cost", 0)
                 st.session_state["last_nutritional_values"] = result.get("nutritional_values", {})
-                st.session_state["min_inclusion_status"] = result.get("min_inclusion_status", [])
                 st.session_state["ingredients_df"] = ingredientes_df_filtrado
                 st.session_state["nutrientes_seleccionados"] = nutrientes_seleccionados
                 st.success("¡Formulación realizada!")
