@@ -204,7 +204,6 @@ with tabs[0]:
     st.session_state["tabla_requerimientos_base"] = df_nutr.copy()
 
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
-# ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -212,59 +211,65 @@ with tabs[1]:
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Bloque de edición de requerimientos (editable aquí)
-    st.subheader("Ajuste de requerimientos nutricionales para la dieta")
-    df_nutr = st.session_state.get("tabla_requerimientos_base", pd.DataFrame()).copy()
-    if df_nutr.empty:
+    # ----------- NUEVO BLOQUE: AJUSTE DE REQUERIMIENTOS SEGÚN DOSIS -----------
+    st.subheader("Ajuste de requerimientos nutricionales por dosis diaria")
+
+    # 1. Requerimientos diarios desde el perfil (ya ajustados a MER)
+    df_base = st.session_state.get("tabla_requerimientos_base", pd.DataFrame()).copy()
+    if df_base.empty:
         st.warning("Primero completa el perfil de mascota para obtener requerimientos.")
-    else:
-        # Input de dosis
-        dosis_g = st.number_input(
-            "Dosis diaria deseada de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g"
-        )
-        # Ajuste proporcional de requerimientos
-        df_nutr_edit = df_nutr.copy()
-        for i, row in df_nutr_edit.iterrows():
-            unidad = row["Unidad"]
-            try:
-                if unidad in ["kcal/kg", "g/kg"]:
-                    factor = dosis_g / 1000
-                    df_nutr_edit.at[i, "Min"] = fmt2(float(row["Min"]) * factor) if row["Min"] not in ["", None] else ""
-                    df_nutr_edit.at[i, "Max"] = fmt2(float(row["Max"]) * factor) if row["Max"] not in ["", None] else ""
-            except Exception:
-                pass
-        # Tabla editable
-        editable_cols = {
-            "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
-            "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
+        st.stop()
+
+    # 2. Input dosis diaria
+    dosis_g = st.number_input(
+        "Dosis diaria de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g"
+    )
+    dosis_kg = dosis_g / 1000
+
+    # 3. Calcular requerimientos por kg de dieta
+    df_req_kg = df_base.copy()
+    df_req_kg["Min por kg dieta"] = df_req_kg.apply(
+        lambda row: float(row["Min"])/dosis_kg if row["Min"] not in ["", None, "None"] else "",
+        axis=1
+    )
+    df_req_kg["Max por kg dieta"] = df_req_kg.apply(
+        lambda row: float(row["Max"])/dosis_kg if row["Max"] not in ["", None, "None"] and float(row["Max"]) > 0 else "",
+        axis=1
+    )
+
+    # 4. Tabla editable de requerimientos por kg de dieta (para el modelo)
+    editable_cols = {
+        "Min por kg dieta": st.column_config.NumberColumn("Min por kg dieta", min_value=0.0, step=0.01),
+        "Max por kg dieta": st.column_config.NumberColumn("Max por kg dieta", min_value=0.0, step=0.01),
+    }
+    df_req_kg_edit = st.data_editor(
+        df_req_kg[["Nutriente", "Min por kg dieta", "Max por kg dieta", "Unidad"]],
+        column_config=editable_cols,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        key="tabla_req_kg_editable"
+    )
+
+    # 5. Guardar dict para el optimizador (solo nut: min/max por kg dieta)
+    user_requirements = {}
+    for _, row in df_req_kg_edit.iterrows():
+        nut = row["Nutriente"]
+        try:
+            min_val = float(row["Min por kg dieta"]) if row["Min por kg dieta"] not in ["", None, "None"] else 0.0
+        except Exception:
+            min_val = 0.0
+        try:
+            max_val = float(row["Max por kg dieta"]) if row["Max por kg dieta"] not in ["", None, "None"] else 0.0
+        except Exception:
+            max_val = 0.0
+        unidad = row["Unidad"]
+        user_requirements[nut] = {
+            "min": min_val,
+            "max": max_val,
+            "unit": unidad
         }
-        df_nutr_editable = st.data_editor(
-            df_nutr_edit,
-            column_config=editable_cols,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="fixed",
-            key="tabla_editable_nutrientes_formulacion"
-        )
-        # Guardar dict para el modelo
-        user_requirements = {}
-        for _, row in df_nutr_editable.iterrows():
-            nut = row["Nutriente"]
-            try:
-                min_val = float(row["Min"]) if row["Min"] not in ["", None, "None"] else 0.0
-            except Exception:
-                min_val = 0.0
-            try:
-                max_val = float(row["Max"]) if row["Max"] not in ["", None, "None"] else 0.0
-            except Exception:
-                max_val = 0.0
-            unidad = row["Unidad"]
-            user_requirements[nut] = {
-                "min": min_val,
-                "max": max_val,
-                "unit": unidad
-            }
-        st.session_state["nutrientes_requeridos"] = user_requirements
+    st.session_state["nutrientes_requeridos"] = user_requirements
 
   # ---------- BLOQUE 6.1: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
     ingredientes_file = st.file_uploader(
