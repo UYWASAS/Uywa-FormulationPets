@@ -270,12 +270,15 @@ with tabs[1]:
     df_req_kg = df_base.copy()
     df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
     if "Max" not in df_req_kg.columns:
-        df_req_kg["Max"] = 0.0  # Puedes inicializar en 0, o cargar valores si tienes referencia
-    df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
+        df_req_kg["Max"] = 0.0  # Inicializa Max si no existe
+    else:
+        df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
     df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
     df_req_kg["Max por kg dieta"] = df_req_kg["Max"] / dosis_kg
-    df_req_kg.loc[df_base["Min"].isin(["", None, "None"]), "Min por kg dieta"] = ""
-    df_req_kg.loc[df_base.get("Max", pd.Series()).isin(["", None, "None"]), "Max por kg dieta"] = ""
+
+    # Solo limpiar celdas si la columna Max existe en df_base y tiene longitud adecuada
+    if "Max" in df_base.columns and len(df_base["Max"]) == len(df_req_kg):
+        df_req_kg.loc[df_base["Max"].isin(["", None, "None"]), "Max por kg dieta"] = ""
 
     # --- Tabla editable de requerimientos por kg de dieta (Min y Max) ---
     editable_cols = {
@@ -310,6 +313,7 @@ with tabs[1]:
             "unit": unidad
         }
     st.session_state["nutrientes_requeridos"] = user_requirements
+
     # ------------------- INGREDIENTES Y LÍMITES -------------------
     ingredientes_file = st.file_uploader(
         "Matriz de ingredientes (.csv o .xlsx)", 
@@ -427,7 +431,6 @@ with tabs[2]:
     result = st.session_state.get("last_result", None)
     ingredientes_df_filtrado = st.session_state.get("ingredients_df", None)
 
-    # Ingredientes seleccionados por el usuario
     ingredientes_sel = []
     if ingredientes_df_filtrado is not None and "Ingrediente" in ingredientes_df_filtrado.columns:
         ingredientes_sel = list(ingredientes_df_filtrado["Ingrediente"])
@@ -491,7 +494,7 @@ with tabs[2]:
         })
     comp_df = pd.DataFrame(comp_list)
     st.dataframe(comp_df, use_container_width=True)
-        
+    
 # ======================== BLOQUE AUXILIARES PARA BLOQUE 8 (GRÁFICOS) ========================
 
 # --- Formato decimales ---
