@@ -384,34 +384,30 @@ with tabs[1]:
 
     # 2. Input dosis diaria
     dosis_g = st.number_input(
-        "Dosis diaria de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g"
+        "Dosis diaria de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g_formulacion"
     )
     dosis_kg = dosis_g / 1000
 
     # 3. Calcular requerimientos por kg de dieta
     df_req_kg = df_base.copy()
     df_req_kg["Min"] = df_req_kg["Min"].replace("", "0").astype(float)
-    df_req_kg["Max"] = df_req_kg["Max"].replace("", "0").astype(float)
     df_req_kg["Min por kg dieta"] = df_req_kg["Min"] / dosis_kg
-    df_req_kg["Max por kg dieta"] = df_req_kg["Max"] / dosis_kg
     df_req_kg.loc[df_base["Min"].isin(["", None, "None"]), "Min por kg dieta"] = ""
-    df_req_kg.loc[df_base["Max"].isin(["", None, "None"]), "Max por kg dieta"] = ""
 
-    # 4. Tabla editable de requerimientos por kg de dieta
+    # 4. Tabla editable de requerimientos por kg de dieta (solo Min)
     editable_cols = {
         "Min por kg dieta": st.column_config.NumberColumn("Min por kg dieta", min_value=0.0, step=0.01),
-        "Max por kg dieta": st.column_config.NumberColumn("Max por kg dieta", min_value=0.0, step=0.01),
     }
     df_req_kg_edit = st.data_editor(
-        df_req_kg[["Nutriente", "Min por kg dieta", "Max por kg dieta", "Unidad"]],
+        df_req_kg[["Nutriente", "Min por kg dieta", "Unidad"]],
         column_config=editable_cols,
         use_container_width=True,
         hide_index=True,
         num_rows="fixed",
-        key="tabla_req_kg_editable"
+        key="tabla_req_kg_editable_formulacion"
     )
 
-    # 5. Guardar dict para el optimizador (solo nut: min/max por kg dieta)
+    # 5. Guardar dict para el optimizador (solo nut: min por kg dieta)
     user_requirements = {}
     for _, row in df_req_kg_edit.iterrows():
         nut = row["Nutriente"]
@@ -419,14 +415,10 @@ with tabs[1]:
             min_val = float(row["Min por kg dieta"]) if row["Min por kg dieta"] not in ["", None, "None"] else 0.0
         except Exception:
             min_val = 0.0
-        try:
-            max_val = float(row["Max por kg dieta"]) if row["Max por kg dieta"] not in ["", None, "None"] else 0.0
-        except Exception:
-            max_val = 0.0
         unidad = row["Unidad"]
         user_requirements[nut] = {
             "min": min_val,
-            "max": max_val,
+            "max": None,  # Ya no se usa max
             "unit": unidad
         }
     st.session_state["nutrientes_requeridos"] = user_requirements
@@ -464,7 +456,7 @@ with tabs[1]:
                     f"Selecciona ingredientes de {cat}",
                     ing_cat,
                     default=[],
-                    key=f"multiselect_{cat}"
+                    key=f"multiselect_{cat}_formulacion"
                 )
                 ingredientes_seleccionados.extend(sel_cat)
         ingredientes_sel = list(dict.fromkeys(ingredientes_seleccionados))
@@ -491,7 +483,7 @@ with tabs[1]:
                 },
                 use_container_width=True,
                 hide_index=True,
-                key="tabla_limites_inclusion"
+                key="tabla_limites_inclusion_formulacion"
             )
             for _, row in limites_editados.iterrows():
                 ing = row["Ingrediente"]
@@ -508,7 +500,7 @@ with tabs[1]:
                 ingredientes_df_filtrado,
                 column_config={col: st.column_config.NumberColumn() for col in editable_cols},
                 use_container_width=True,
-                key="editor_materias_seleccionadas"
+                key="editor_materias_seleccionadas_formulacion"
             )
         st.write(f"Ingredientes seleccionados: {', '.join(ingredientes_sel) if ingredientes_sel else 'Ninguno'}")
         formulable = not ingredientes_df_filtrado.empty
@@ -541,7 +533,7 @@ with tabs[1]:
 
     else:
         st.info("Selecciona al menos un ingrediente para formular la mezcla.")
-
+        
     # --------- MOSTRAR RESULTADOS Y VALIDACIÓN (solo max es obligatorio) ---------
     if st.session_state.get("last_nutritional_values", None) is not None:
         st.subheader("Composición nutricional y cumplimiento (editable)")
