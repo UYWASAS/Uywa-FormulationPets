@@ -4,12 +4,6 @@ import math
 from utils import fmt2
 
 class DietFormulator:
-    MACRO_MIN_NUTRIENTS = [
-        "Proteina", "EM", "Grasa", "Ácido Linoleico", "Ca", "P", "Na", "Cl",
-        "Lisina", "Metionina", "Metionina + Cistina", "Valina", "Triptófano",
-        "Fenilalanina", "Isoleucina", "Treonina", "Arginina", "Leucina"
-    ]
-
     def __init__(
         self,
         ingredients_df: pd.DataFrame,
@@ -27,7 +21,7 @@ class DietFormulator:
     ):
         self.ingredients_df = ingredients_df
         self.nutrient_list = nutrient_list
-        self.requirements = requirements
+        self.requirements = requirements  # DEBE venir de la tabla de formulación ajustada
         self.selected_species = selected_species
         self.selected_stage = selected_stage
         self.limits = limits if limits else {"min": {}, "max": {}}
@@ -46,7 +40,8 @@ class DietFormulator:
             prob += ingredient_vars[i] <= max_inc, f"MaxInc_{ing_name}"
             prob += ingredient_vars[i] >= min_inc, f"MinInc_{ing_name}"
 
-    def _add_nutrient_constraints(self, prob, ingredient_vars, slack_vars_min, slack_vars_max):
+    def _add_nutrient_constraints(self, prob, ingredient_vars):
+        # SOLO restricciones duras, sin slacks
         for nut in self.nutrient_list:
             if nut in self.ingredients_df.columns:
                 nut_sum = pulp.lpSum([self.ingredients_df.loc[i, nut] * ingredient_vars[i] for i in self.ingredients_df.index])
@@ -57,14 +52,14 @@ class DietFormulator:
                     try:
                         min_val = float(req_min)
                         if not math.isnan(min_val) and not math.isinf(min_val):
-                            prob += nut_sum + slack_vars_min[nut] >= min_val, f"Min_{nut}"
+                            prob += nut_sum >= min_val, f"Min_{nut}"
                     except Exception:
                         pass
-                if req_max is not None and str(req_max) != "":
+                if req_max is not None and str(req_max) != "" and float(req_max) > 0:
                     try:
                         max_val = float(req_max)
-                        if not math.isnan(max_val) and not math.isinf(max_val) and max_val > 0:
-                            prob += nut_sum - slack_vars_max[nut] <= max_val, f"Max_{nut}"
+                        if not math.isnan(max_val) and not math.isinf(max_val):
+                            prob += nut_sum <= max_val, f"Max_{nut}"
                     except Exception:
                         pass
 
@@ -74,27 +69,18 @@ class DietFormulator:
             "Ing", self.ingredients_df.index, lowBound=0, upBound=1, cat="Continuous"
         )
         prob += pulp.lpSum([ingredient_vars[i] for i in self.ingredients_df.index]) == 1, "Total_Proportion"
-        slack_vars_min = {nut: pulp.LpVariable(f"slack_min_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
-        slack_vars_max = {nut: pulp.LpVariable(f"slack_max_{nut}", lowBound=0, cat="Continuous") for nut in self.nutrient_list}
         self._add_ingredient_inclusion_constraints(prob, ingredient_vars)
-        self._add_nutrient_constraints(prob, ingredient_vars, slack_vars_min, slack_vars_max)
-        # Cost as objective
+        self._add_nutrient_constraints(prob, ingredient_vars)
+        # Objetivo: minimizar costo
         total_cost = pulp.lpSum([
             ingredient_vars[i] * float(self.ingredients_df.loc[i, "precio"] if "precio" in self.ingredients_df.columns else 0)
             for i in self.ingredients_df.index
         ])
-        # Penalize slack if needed (very high weight)
-        penalty = pulp.lpSum([
-            1e6 * slack_vars_min[nut] + 1e6 * slack_vars_max[nut] for nut in self.nutrient_list
-        ])
-        prob += total_cost + penalty
+        prob += total_cost
         return prob, ingredient_vars
 
     def _collect_results(self, ingredient_vars):
         diet = {}
-        min_inclusion_status = []
-        nutritional_values = {}
-        compliance_data = []
         ingredient_amounts = {}
         for i in self.ingredients_df.index:
             var_val = ingredient_vars[i].varValue
@@ -110,17 +96,7 @@ class DietFormulator:
         for ingredient_name, frac in ingredient_amounts.items():
             diet[ingredient_name] = float(fmt2(frac * 100))
 
-        for ingredient_name in self.min_selected_ingredients:
-            amount = diet.get(ingredient_name, 0)
-            min_req = self.min_selected_ingredients[ingredient_name] * 100
-            cumple_min = amount >= min_req
-            min_inclusion_status.append({
-                "Ingrediente": ingredient_name,
-                "Incluido (%)": fmt2(amount),
-                "Minimo requerido (%)": fmt2(min_req),
-                "Cumple mínimo": "✔️" if cumple_min else "❌"
-            })
-
+        nutritional_values = {}
         for nutrient in self.nutrient_list:
             valor_nut = 0
             if nutrient in self.ingredients_df.columns:
@@ -137,30 +113,6 @@ class DietFormulator:
                     valor_nut += nut_val * frac
             nutritional_values[nutrient] = float(fmt2(valor_nut))
 
-        for nutrient in self.nutrient_list:
-            req = self.requirements.get(nutrient, {})
-            req_min = req.get("min", "")
-            req_max = req.get("max", "")
-            obtenido = nutritional_values.get(nutrient, None)
-            estado = "✔️"
-            try:
-                req_min_f = float(req_min)
-                obtenido_f = float(obtenido)
-                if obtenido_f < req_min_f:
-                    estado = "❌"
-                req_max_f = float(req_max)
-                if req_max_f != 0 and obtenido_f > req_max_f:
-                    estado = "❌"
-            except (ValueError, TypeError):
-                pass
-            compliance_data.append({
-                "Nutriente": nutrient,
-                "Mínimo": fmt2(req_min),
-                "Máximo": fmt2(req_max),
-                "Obtenido": fmt2(obtenido) if obtenido is not None and obtenido != "" else "",
-                "Cumple": estado
-            })
-
         total_cost_value = 0
         for ingredient_name, frac in ingredient_amounts.items():
             idx = self.ingredients_df[self.ingredients_df["Ingrediente"] == ingredient_name].index[0]
@@ -176,8 +128,6 @@ class DietFormulator:
             "success": True,
             "diet": diet,
             "nutritional_values": nutritional_values,
-            "compliance_data": compliance_data,
-            "min_inclusion_status": min_inclusion_status,
             "cost": total_cost_value,
         }
 
