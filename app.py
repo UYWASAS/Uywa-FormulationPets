@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla editable) ========================
+# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, no editable) ========================
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -150,7 +150,7 @@ with tabs[0]:
         unsafe_allow_html=True
     )
 
-    # Generar DataFrame de requerimientos ajustados
+    # Generar DataFrame de requerimientos ajustados (NO editable aquí)
     def ajustar_nutriente(val_ref, energia_ref, energia_actual):
         if val_ref is None:
             return None
@@ -198,40 +198,12 @@ with tabs[0]:
     df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
     df_nutr["Max"] = df_nutr["Max"].replace("None", "").replace({None: ""})
 
-    # TABLA EDITABLE (sin pestañas, sin expander)
-    editable_cols = {
-        "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
-        "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
-    }
-    df_nutr_editable = st.data_editor(
-        df_nutr,
-        column_config=editable_cols,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        key="tabla_editable_nutrientes"
-    )
+    # Tabla SOLO referencia
+    st.dataframe(df_nutr, use_container_width=True, hide_index=True)
+    # Guardar en sesión para Formulación
+    st.session_state["tabla_requerimientos_base"] = df_nutr.copy()
 
-    # Guarda los valores editados en el estado de sesión
-    user_requirements = {}
-    for _, row in df_nutr_editable.iterrows():
-        nut = row["Nutriente"]
-        try:
-            min_val = float(row["Min"]) if row["Min"] not in ["", None, "None"] else 0.0
-        except Exception:
-            min_val = 0.0
-        try:
-            max_val = float(row["Max"]) if row["Max"] not in ["", None, "None"] else 0.0
-        except Exception:
-            max_val = 0.0
-        unidad = row["Unidad"]
-        user_requirements[nut] = {
-            "min": min_val,
-            "max": max_val,
-            "unit": unidad
-        }
-    st.session_state["nutrientes_requeridos"] = user_requirements
-
+# ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
 with tabs[1]:
     st.header("Formulación automática de dieta")
@@ -240,7 +212,61 @@ with tabs[1]:
     st.markdown(f"**Mascota activa:** <span style='font-weight:700;font-size:18px'>{nombre_mascota}</span>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # ---------- BLOQUE 6.1: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
+    # Bloque de edición de requerimientos (editable aquí)
+    st.subheader("Ajuste de requerimientos nutricionales para la dieta")
+    df_nutr = st.session_state.get("tabla_requerimientos_base", pd.DataFrame()).copy()
+    if df_nutr.empty:
+        st.warning("Primero completa el perfil de mascota para obtener requerimientos.")
+    else:
+        # Input de dosis
+        dosis_g = st.number_input(
+            "Dosis diaria deseada de dieta (g/día)", min_value=10, max_value=3000, value=1000, step=10, key="dosis_dieta_g"
+        )
+        # Ajuste proporcional de requerimientos
+        df_nutr_edit = df_nutr.copy()
+        for i, row in df_nutr_edit.iterrows():
+            unidad = row["Unidad"]
+            try:
+                if unidad in ["kcal/kg", "g/kg"]:
+                    factor = dosis_g / 1000
+                    df_nutr_edit.at[i, "Min"] = fmt2(float(row["Min"]) * factor) if row["Min"] not in ["", None] else ""
+                    df_nutr_edit.at[i, "Max"] = fmt2(float(row["Max"]) * factor) if row["Max"] not in ["", None] else ""
+            except Exception:
+                pass
+        # Tabla editable
+        editable_cols = {
+            "Min": st.column_config.NumberColumn("Min", min_value=0.0, step=0.01),
+            "Max": st.column_config.NumberColumn("Max", min_value=0.0, step=0.01)
+        }
+        df_nutr_editable = st.data_editor(
+            df_nutr_edit,
+            column_config=editable_cols,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key="tabla_editable_nutrientes_formulacion"
+        )
+        # Guardar dict para el modelo
+        user_requirements = {}
+        for _, row in df_nutr_editable.iterrows():
+            nut = row["Nutriente"]
+            try:
+                min_val = float(row["Min"]) if row["Min"] not in ["", None, "None"] else 0.0
+            except Exception:
+                min_val = 0.0
+            try:
+                max_val = float(row["Max"]) if row["Max"] not in ["", None, "None"] else 0.0
+            except Exception:
+                max_val = 0.0
+            unidad = row["Unidad"]
+            user_requirements[nut] = {
+                "min": min_val,
+                "max": max_val,
+                "unit": unidad
+            }
+        st.session_state["nutrientes_requeridos"] = user_requirements
+
+  # ---------- BLOQUE 6.1: SELECCIÓN Y EDICIÓN DE INGREDIENTES ----------
     ingredientes_file = st.file_uploader(
         "Matriz de ingredientes (.csv o .xlsx)", 
         type=["csv", "xlsx"], 
