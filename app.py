@@ -129,7 +129,7 @@ tabs = st.tabs([
 
 from nutrient_tools import transformar_referencia_a_porcentaje
 
-# ======================== BLOQUE 5.1: TAB PERFIL DE MASCOTA (tabla de referencia, visual mejorada, solo Min) ========================
+# Bloque 5.1: TAB PERFIL DE MASCOTA (visualización mejorada, solo Min, sin Max)
 with tabs[0]:
     show_mascota_form(profile, on_update_callback=update_and_save_profile)
     mascota = st.session_state.get("profile", {}).get("mascota", {})
@@ -150,7 +150,6 @@ with tabs[0]:
         unsafe_allow_html=True
     )
 
-    # Generar DataFrame de requerimientos ajustados (NO editable aquí, solo Min y visual mejorada)
     def ajustar_nutriente(val_ref, energia_ref, energia_actual):
         if val_ref is None:
             return None
@@ -163,75 +162,64 @@ with tabs[0]:
         if nutr == "EM" and unidad == "kcal/kg":
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": fmt2(energia),
+                "Min": float(energia),
                 "Unidad": unidad
             })
         elif nutr == "EM_1" and unidad == "kcal/g":
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": fmt2(min_aj),
+                "Min": min_aj,
                 "Unidad": unidad
             })
         elif unidad in ["g/100g", "g/kg"]:
             min_aj = ajustar_nutriente(info["min"], energia_ref, energia) if info["min"] is not None else None
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": fmt2(min_aj),
+                "Min": min_aj,
                 "Unidad": unidad
             })
         else:
             requerimientos_ajustados.append({
                 "Nutriente": nutr,
-                "Min": fmt2(info["min"]),
+                "Min": info["min"],
                 "Unidad": unidad
             })
     df_nutr = pd.DataFrame(requerimientos_ajustados)
-    df_nutr["Min"] = df_nutr["Min"].replace("None", "").replace({None: ""})
+    df_nutr = df_nutr.replace("None", np.nan)
+    df_nutr = df_nutr.dropna(subset=["Min"])  # Quita vacíos
 
-    # --- VISUALIZACIÓN MEJORADA ---
-    # Ordena para que los nutrientes con mayor requerimiento estén arriba (opcional)
-    df_nutr_vis = df_nutr.copy()
-    # Si todos los valores son numéricos, puedes ordenar
-    try:
-        df_nutr_vis["Min_num"] = pd.to_numeric(df_nutr_vis["Min"], errors="coerce")
-        df_nutr_vis = df_nutr_vis.sort_values("Min_num", ascending=False)
-    except Exception:
-        pass
+    # Ordenar por valor mínimo descendente
+    df_nutr["Min_num"] = pd.to_numeric(df_nutr["Min"], errors="coerce")
+    df_nutr = df_nutr.sort_values(by="Min_num", ascending=False).reset_index(drop=True)
 
-    # Visualización con barras de fondo (solo si todos los valores son numéricos)
-    st.markdown(
-        """
-        <style>
-            .nutr-table th, .nutr-table td {padding: 6px 12px;}
-            .nutr-table th {background: #f3f6fa;}
-            .nutr-bar {display:inline-block; height:18px; background:#7fc47f; border-radius:4px;}
-            .nutr-cell {white-space:nowrap;}
-        </style>
-        """,
-        unsafe_allow_html=True
+    # Gráfico de barras horizontales (tipo tabla visual, no editable)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=df_nutr["Nutriente"],
+        x=df_nutr["Min_num"],
+        orientation='h',
+        marker=dict(color="#7fc47f"),
+        text=[f"{fmt2(min)} {uni}" for min, uni in zip(df_nutr["Min"], df_nutr["Unidad"])],
+        textposition='outside',
+        hovertemplate='%{y}<br>Mín: %{x} %{customdata}',
+        customdata=df_nutr["Unidad"],
+    ))
+    fig.update_layout(
+        height=350 + 18*len(df_nutr),
+        xaxis_title="Valor mínimo requerido",
+        yaxis_title="Nutriente",
+        plot_bgcolor='#f3f6fa',
+        paper_bgcolor='#f3f6fa',
+        margin=dict(l=12, r=12, t=12, b=12),
+        showlegend=False
     )
-    st.markdown("<div style='overflow-x:auto'><table class='nutr-table'><tr><th>Nutriente</th><th>Mín</th><th>Unidad</th></tr>", unsafe_allow_html=True)
-    max_val = df_nutr_vis["Min_num"].max() if "Min_num" in df_nutr_vis.columns else 1
-    for _, row in df_nutr_vis.iterrows():
-        min_val = row["Min"]
-        try:
-            min_num = float(min_val)
-        except Exception:
-            min_num = 0
-        bar_width = int(200 * min_num / max_val) if max_val > 0 else 0
-        bar_html = f"<span class='nutr-bar' style='width:{bar_width}px'></span>" if bar_width > 0 else ""
-        st.markdown(
-            f"<tr>"
-            f"<td class='nutr-cell'>{row['Nutriente']}</td>"
-            f"<td class='nutr-cell'>{min_val} {bar_html}</td>"
-            f"<td class='nutr-cell'>{row['Unidad']}</td>"
-            f"</tr>",
-            unsafe_allow_html=True
-        )
-    st.markdown("</table></div>", unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # Guardar en sesión para Formulación (SOLO columnas Nutriente, Min, Unidad)
+    # Si quieres la tabla clásica pero solo Min:
+    st.markdown("#### Tabla de referencia (solo valores mínimos)")
+    st.dataframe(df_nutr[["Nutriente", "Min", "Unidad"]], use_container_width=True, hide_index=True)
+
     st.session_state["tabla_requerimientos_base"] = df_nutr[["Nutriente", "Min", "Unidad"]].copy()
         
 # ======================== BLOQUE 6: TAB FORMULACIÓN ========================
