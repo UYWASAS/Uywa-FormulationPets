@@ -892,9 +892,69 @@ with tabs[2]:
             else:
                 st.info("Selecciona al menos un nutriente para visualizar el precio sombra por ingrediente.")
 
-# ======================== BLOQUE 9: RESUMEN Y EXPORTAR ========================
+# ======================== BLOQUE 9: RESUMEN Y EXPORTAR (ESTILO UNIFICADO) ========================
 with tabs[3]:
     st.header("Resumen general y exportación")
+
+    # --- CSS de tabla bonita (igual que requerimientos) ---
+    st.markdown("""
+        <style>
+        .styled-table {
+            border-collapse: collapse;
+            margin: 10px 0 20px 0;
+            font-size: 16px;
+            min-width: 390px;
+            width: 90%;
+            border-radius: 14px 14px 0 0;
+            overflow: hidden;
+            box-shadow: 0 2px 10px #e3ecf7;
+        }
+        .styled-table th {
+            background-color: #19345c !important;
+            color: #fff;
+            text-align: center;
+            font-weight: bold;
+            padding: 10px 7px;
+            font-size: 17px;
+            border-right: 1px solid #e3ecf7;
+        }
+        .styled-table td {
+            padding: 7px 7px;
+            text-align: center;
+            border-bottom: 1px solid #e3ecf7;
+            font-size: 16px;
+        }
+        .styled-table tr:nth-child(even) {
+            background-color: #f3f6fa;
+        }
+        .styled-table tr:nth-child(odd) {
+            background-color: #eaf3fc;
+        }
+        .styled-table td.min-cell, .styled-table td.obt-cell {
+            font-weight: bold;
+            color: #23783d;
+            background: #e0f7e9;
+            border-radius: 6px;
+        }
+        .styled-table td.fail-cell {
+            color: #c0392b;
+            background: #ffeaea;
+        }
+        .photo-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 140px;
+            background: #eaf3fc;
+            border-radius: 12px;
+            color: #19345c;
+            font-size: 18px;
+            font-weight: 600;
+            border: 1px solid #e3ecf7;
+            margin-bottom: 8px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
     # === 1. Perfil de la mascota ===
     perfil = st.session_state.get("profile", {})
@@ -903,24 +963,30 @@ with tabs[3]:
     cols = st.columns([1, 3])
     with cols[0]:
         foto_path = mascota.get("foto", None)
-        if foto_path:  # Si guardas la ruta en el perfil
+        from PIL import Image
+        import io
+
+        foto_ok = False
+        if foto_path:
             try:
-                st.image(foto_path, width=130)
+                if isinstance(foto_path, bytes):
+                    img = Image.open(io.BytesIO(foto_path))
+                else:
+                    img = Image.open(foto_path)
+                st.image(img, width=130)
+                foto_ok = True
             except Exception:
-                st.info("No hay foto disponible.")
-        else:
-            try:
-                st.image("assets/pet_placeholder.png", width=130)
-            except Exception:
-                st.info("No hay foto disponible.")
+                foto_ok = False
+        if not foto_ok:
+            st.markdown("<div class='photo-box'>No hay foto disponible.</div>", unsafe_allow_html=True)
     with cols[1]:
         st.markdown(f"""
-        - **Nombre:** {mascota.get('nombre', 'No definido')}
-        - **Especie:** {mascota.get('especie', 'No definido')}
-        - **Edad:** {mascota.get('edad', 'No definido')} años
-        - **Peso:** {mascota.get('peso', 'No definido')} kg
-        - **Condición:** {mascota.get('condicion', 'No definido')}
-        """)
+        - <b>Nombre:</b> {mascota.get('nombre', 'No definido')}
+        - <b>Especie:</b> {mascota.get('especie', 'No definido')}
+        - <b>Edad:</b> {mascota.get('edad', 'No definido')} años
+        - <b>Peso:</b> {mascota.get('peso', 'No definido')} kg
+        - <b>Condición:</b> {mascota.get('condicion', 'No definido')}
+        """, unsafe_allow_html=True)
 
     # === 2. Dieta (proporciones y gramos) ===
     st.subheader("Composición de la dieta formulada")
@@ -941,8 +1007,19 @@ with tabs[3]:
         })
     res_df = pd.DataFrame(comp_data)
 
+    # Render tabla HTML bonita
     if not res_df.empty and "Ingrediente" in res_df.columns:
-        st.dataframe(res_df.set_index("Ingrediente"), use_container_width=True)
+        html_table = "<table class='styled-table'><tr><th>Ingrediente</th><th>% Inclusión</th><th>Gramos en dosis</th></tr>"
+        for _, row in res_df.iterrows():
+            html_table += (
+                f"<tr>"
+                f"<td>{row['Ingrediente']}</td>"
+                f"<td>{row['% Inclusión']}</td>"
+                f"<td>{row['Gramos en dosis']}</td>"
+                f"</tr>"
+            )
+        html_table += "</table>"
+        st.markdown(html_table, unsafe_allow_html=True)
     else:
         st.info("No hay ingredientes para mostrar la dieta. Por favor, formula primero la dieta y selecciona ingredientes.")
 
@@ -956,9 +1033,9 @@ with tabs[3]:
         total_cost = 0
         precio_kg = 0
         precio_dosis = 0
-    st.markdown(f"- **Costo total (por 100 kg):** ${fmt2(total_cost)}")
-    st.markdown(f"- **Precio por kg:** ${fmt2(precio_kg)}")
-    st.markdown(f"- **Precio por dosis diaria:** ${fmt2(precio_dosis)}")
+    st.markdown(f"- <b>Costo total (por 100 kg):</b> ${fmt2(total_cost)}", unsafe_allow_html=True)
+    st.markdown(f"- <b>Precio por kg:</b> ${fmt2(precio_kg)}", unsafe_allow_html=True)
+    st.markdown(f"- <b>Precio por dosis diaria:</b> ${fmt2(precio_dosis)}", unsafe_allow_html=True)
 
     # === 4. Requerimientos utilizados ===
     st.subheader("Requerimientos utilizados (por kg dieta)")
@@ -967,13 +1044,24 @@ with tabs[3]:
     for nut, req in user_requirements.items():
         reqs.append({
             "Nutriente": nut,
-            "Mín": fmt2(req.get("min", "")),
-            "Máx": fmt2(req.get("max", "")),
+            "Min": fmt2(req.get("min", "")),
+            "Max": fmt2(req.get("max", "")),
             "Unidad": req.get("unit", "")
         })
     reqs_df = pd.DataFrame(reqs)
     if not reqs_df.empty and "Nutriente" in reqs_df.columns:
-        st.dataframe(reqs_df, use_container_width=True)
+        html_table = "<table class='styled-table'><tr><th>Nutriente</th><th>Mín</th><th>Máx</th><th>Unidad</th></tr>"
+        for _, row in reqs_df.iterrows():
+            html_table += (
+                f"<tr>"
+                f"<td>{row['Nutriente']}</td>"
+                f"<td class='min-cell'>{row['Min']}</td>"
+                f"<td>{row['Max']}</td>"
+                f"<td>{row['Unidad']}</td>"
+                f"</tr>"
+            )
+        html_table += "</table>"
+        st.markdown(html_table, unsafe_allow_html=True)
     else:
         st.info("No hay requerimientos para mostrar.")
 
@@ -990,7 +1078,17 @@ with tabs[3]:
         })
     compnut_df = pd.DataFrame(comp_list)
     if not compnut_df.empty and "Nutriente" in compnut_df.columns:
-        st.dataframe(compnut_df, use_container_width=True)
+        html_table = "<table class='styled-table'><tr><th>Nutriente</th><th>Obtenido</th><th>Unidad</th></tr>"
+        for _, row in compnut_df.iterrows():
+            html_table += (
+                f"<tr>"
+                f"<td>{row['Nutriente']}</td>"
+                f"<td class='obt-cell'>{row['Obtenido']}</td>"
+                f"<td>{row['Unidad']}</td>"
+                f"</tr>"
+            )
+        html_table += "</table>"
+        st.markdown(html_table, unsafe_allow_html=True)
     else:
         st.info("No hay composición nutricional para mostrar.")
 
@@ -1000,7 +1098,6 @@ with tabs[3]:
     import io
     import pandas as pd
 
-    # Preparamos los distintos DataFrames
     perfil_df = pd.DataFrame([mascota])
     dieta_df = res_df
     precio_df = pd.DataFrame([{
