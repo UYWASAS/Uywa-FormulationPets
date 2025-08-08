@@ -925,7 +925,7 @@ with tabs[3]:
     # === 2. Dieta (proporciones y gramos) ===
     st.subheader("Composición de la dieta formulada")
     result = st.session_state.get("last_result", None)
-    diet = result.get("diet", {}) if result else {}
+    diet = result.get("diet", {}) if result is not None else {}
     dosis_g = st.session_state.get("dosis_dieta_g_formulacion", 1000)
     ingredientes_df_filtrado = st.session_state.get("ingredients_df", None)
     ingredientes_sel = list(ingredientes_df_filtrado["Ingrediente"]) if ingredientes_df_filtrado is not None and "Ingrediente" in ingredientes_df_filtrado.columns else []
@@ -948,9 +948,14 @@ with tabs[3]:
 
     # === 3. Precio de la dieta ===
     st.subheader("Precio de la dieta")
-    total_cost = result.get("cost", 0)
-    precio_kg = total_cost / 100 if total_cost else 0
-    precio_dosis = (precio_kg * dosis_g) / 1000
+    if result is not None:
+        total_cost = result.get("cost", 0)
+        precio_kg = total_cost / 100 if total_cost else 0
+        precio_dosis = (precio_kg * dosis_g) / 1000
+    else:
+        total_cost = 0
+        precio_kg = 0
+        precio_dosis = 0
     st.markdown(f"- **Costo total (por 100 kg):** ${fmt2(total_cost)}")
     st.markdown(f"- **Precio por kg:** ${fmt2(precio_kg)}")
     st.markdown(f"- **Precio por dosis diaria:** ${fmt2(precio_dosis)}")
@@ -974,7 +979,7 @@ with tabs[3]:
 
     # === 5. Composición nutricional obtenida ===
     st.subheader("Composición nutricional de la dieta")
-    nutritional_values = result.get("nutritional_values", {}) if result else {}
+    nutritional_values = result.get("nutritional_values", {}) if result is not None else {}
     comp_list = []
     for nut, req in user_requirements.items():
         obtenido = nutritional_values.get(nut, None)
